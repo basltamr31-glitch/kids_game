@@ -215,11 +215,12 @@ export class Hud {
         ],
       );
       onTap(button, () => {
-        // Tapping a task walks the child to it; it does not teleport them.
-        const position = this.interaction.anchorPosition(activity.anchor);
-        if (position) {
+        // Starting from the list is identical to tapping the world bubble: the
+        // activity's first step walks the child there. Nothing teleports.
+        // The anchor lookup is a guard — an animal that somehow has no position
+        // should do nothing rather than start a script that cannot resolve.
+        if (this.interaction.anchorPosition(activity.anchor)) {
           this.ctx.audio.play('tap');
-          this.ctx.bus.emit('ui:open', { screen: 'walk-to' });
           this.interaction.tryStart(activity);
         }
       });

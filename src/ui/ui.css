@@ -562,7 +562,9 @@ body {
   place-items: center;
   background: rgba(58, 38, 22, 0.42);
   backdrop-filter: blur(calc(var(--u) * 0.4));
-  z-index: 40;
+  /* Above the bedtime fade. The day-end card is shown *over* the darkness once
+     the child has fallen asleep, so a lower z-index here hides it completely. */
+  z-index: 60;
   animation: screen-in 0.25s ease;
   padding: calc(var(--u) * 1.2);
   padding-top: calc(var(--u) * 1.2 + var(--sa-top));
@@ -641,7 +643,8 @@ body {
   position: absolute;
   inset: 0;
   background: #0d1430;
-  z-index: 60;
+  /* Below .screen (60) and below #boot (100). */
+  z-index: 50;
   opacity: 0;
   pointer-events: none;
   transition: opacity 1.6s ease;
