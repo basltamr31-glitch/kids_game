@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="1280" viewBox="0 0 108 108" preserveAspectRatio="xMidYMid slice">
+  <defs>
+    <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#8FC4E8"/>
+      <stop offset="1" stop-color="#F7C7A0"/>
+    </linearGradient>
+  </defs>
+  <rect width="108" height="108" fill="url(#sky)"/>
+  <circle cx="82" cy="24" r="11" fill="#FFE9BC"/>
+  <path d="M22,34 L46.599999999999994,64 L-2.599999999999998,64 Z" fill="#8E9BB5"/>
+  <path d="M54,30 L86.8,70 L21.200000000000003,70 Z" fill="#8E9BB5"/>
+  <path d="M88,35 L110.14,62 L65.86,62 Z" fill="#8E9BB5"/>
+  <path d="M22,34 L31,46 L13,46 Z" fill="#EFF4FF"/>
+  <path d="M54,30 L66,46 L42,46 Z" fill="#EFF4FF"/>
+  <path d="M88,35 L96.1,45.8 L79.9,45.8 Z" fill="#EFF4FF"/>
+  <path d="M0,66 Q54,58 108,66 L108,108 L0,108 Z" fill="#6FB254"/>
+  <path d="M0,80 Q54,72 108,80 L108,108 L0,108 Z" fill="#8FCB6B"/>
+</svg>

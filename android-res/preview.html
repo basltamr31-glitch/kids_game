@@ -1,0 +1,80 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Little Alpine Days — icon check</title>
+    <style>
+      body {
+        margin: 0;
+        padding: 16px;
+        background: #e9eef2;
+        font: 600 13px system-ui, sans-serif;
+        color: #43506b;
+      }
+      .row { display: flex; gap: 18px; align-items: flex-end; flex-wrap: wrap; }
+      figure { margin: 0; text-align: center; }
+      img { display: block; image-rendering: auto; }
+      .sq { border-radius: 18%; box-shadow: 0 3px 10px rgba(0, 0, 0, 0.22); }
+      .circle { border-radius: 50%; box-shadow: 0 3px 10px rgba(0, 0, 0, 0.22); }
+      .squircle { border-radius: 28%; box-shadow: 0 3px 10px rgba(0, 0, 0, 0.22); }
+      figcaption { margin-top: 5px; font-size: 10px; opacity: 0.75; }
+      h2 { font-size: 12px; text-transform: uppercase; letter-spacing: 0.08em; opacity: 0.6; }
+    </style>
+  </head>
+  <body>
+    <!-- Checks the icon survives the masks Android launchers actually apply,
+         and that it is still readable at 48px. -->
+    <h2>Launcher masks</h2>
+    <div class="row">
+      <figure>
+        <img class="sq" src="./master/icon.svg" width="128" height="128" />
+        <figcaption>rounded 128</figcaption>
+      </figure>
+      <figure>
+        <img class="circle" src="./master/icon.svg" width="128" height="128" />
+        <figcaption>circle 128</figcaption>
+      </figure>
+      <figure>
+        <img class="squircle" src="./master/icon.svg" width="128" height="128" />
+        <figcaption>squircle 128</figcaption>
+      </figure>
+    </div>
+
+    <h2>Density check</h2>
+    <div class="row">
+      <figure>
+        <img class="sq" src="./master/icon.svg" width="192" height="192" />
+        <figcaption>192 xxxhdpi</figcaption>
+      </figure>
+      <figure>
+        <img class="sq" src="./master/icon.svg" width="96" height="96" />
+        <figcaption>96 xhdpi</figcaption>
+      </figure>
+      <figure>
+        <img class="sq" src="./master/icon.svg" width="72" height="72" />
+        <figcaption>72 hdpi</figcaption>
+      </figure>
+      <figure>
+        <img class="sq" src="./master/icon.svg" width="48" height="48" />
+        <figcaption>48 mdpi</figcaption>
+      </figure>
+      <figure>
+        <img class="sq" src="./master/icon.svg" width="32" height="32" />
+        <figcaption>32 worst case</figcaption>
+      </figure>
+    </div>
+
+    <h2>Adaptive foreground (safe zone)</h2>
+    <div class="row">
+      <figure>
+        <img class="circle" src="./master/icon-foreground.svg" width="128" height="128"
+             style="background: linear-gradient(#8FC4E8, #F7C7A0)" />
+        <figcaption>fg + bg, circle mask</figcaption>
+      </figure>
+      <figure>
+        <img src="./master/splash.svg" width="220" height="124" style="border-radius: 8px" />
+        <figcaption>splash / feature graphic</figcaption>
+      </figure>
+    </div>
+  </body>
+</html>

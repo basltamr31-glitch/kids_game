@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Little Alpine Days</string>
+    <string name="title_activity_main">Little Alpine Days</string>
+    <string name="package_name">com.meadowlark.littlealpinedays</string>
+    <string name="custom_url_scheme">com.meadowlark.littlealpinedays</string>
+</resources>

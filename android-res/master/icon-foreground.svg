@@ -1,0 +1,37 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="108" height="108" viewBox="0 0 108 108">
+  <g transform="translate(18,18) scale(0.6667)">
+    
+    <circle cx="82" cy="24" r="11" fill="#FFE9BC"/>
+    <path d="M22,34 L46.599999999999994,64 L-2.599999999999998,64 Z" fill="#8E9BB5"/>
+    <path d="M54,30 L86.8,70 L21.200000000000003,70 Z" fill="#8E9BB5"/>
+    <path d="M88,35 L110.14,62 L65.86,62 Z" fill="#8E9BB5"/>
+    <path d="M22,34 L31,46 L13,46 Z" fill="#EFF4FF"/>
+    <path d="M54,30 L66,46 L42,46 Z" fill="#EFF4FF"/>
+    <path d="M88,35 L96.1,45.8 L79.9,45.8 Z" fill="#EFF4FF"/>
+    <path d="M0,66 Q54,58 108,66 L108,108 L0,108 Z" fill="#6FB254"/>
+    <path d="M0,80 Q54,72 108,80 L108,108 L0,108 Z" fill="#8FCB6B"/>
+
+    <!-- Characters live in their own group, pulled inward so a circular
+         launcher mask never clips the cow's head or the child's hair. -->
+    <g transform="translate(8,9) scale(0.84)">
+    <!-- cow -->
+    <rect x="56" y="70" width="38" height="21" rx="9" fill="#FAF6EF"/>
+    <rect x="60" y="89" width="5" height="11" rx="2" fill="#FAF6EF"/>
+    <rect x="72" y="89" width="5" height="11" rx="2" fill="#FAF6EF"/>
+    <rect x="84" y="89" width="5" height="11" rx="2" fill="#FAF6EF"/>
+    <ellipse cx="70" cy="77" rx="6" ry="5" fill="#4A3A32"/>
+    <ellipse cx="86" cy="84" rx="4.5" ry="4" fill="#4A3A32"/>
+    <rect x="90" y="64" width="16" height="15" rx="6" fill="#FAF6EF"/>
+    <circle cx="99" cy="70" r="2" fill="#4A3A32"/>
+
+    <!-- child -->
+    <rect x="18" y="72" width="20" height="23" rx="7" fill="#5B8FD0"/>
+    <circle cx="28" cy="63" r="12" fill="#F6D3B8"/>
+    <path d="M16,62 A12,12 0 0 1 40,62 Z" fill="#6B4226"/>
+    <circle cx="24" cy="64" r="1.8" fill="#4C3A2A"/>
+    <circle cx="33" cy="64" r="1.8" fill="#4C3A2A"/>
+    <path d="M24,68 Q28.5,72 33,68" stroke="#4C3A2A" stroke-width="1.8"
+          stroke-linecap="round" fill="none"/>
+    </g>
+  </g>
+</svg>

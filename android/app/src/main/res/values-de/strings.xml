@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<!-- Only the launcher label is localized here; every in-game string comes from
+     src/localization/locales/*.json so translators touch exactly one place. -->
+<resources>
+    <string name="app_name">Kleine Alpentage</string>
+    <string name="title_activity_main">Kleine Alpentage</string>
+</resources>

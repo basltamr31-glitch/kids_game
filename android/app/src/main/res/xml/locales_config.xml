@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Per-app language picker (Android 13+). Lists exactly the locales bundled in
+  src/localization/locales, so a parent can set the game's language from the
+  system settings independently of the device language.
+-->
+<locale-config xmlns:android="http://schemas.android.com/apk/res/android">
+    <locale android:name="en" />
+    <locale android:name="de" />
+    <locale android:name="fr" />
+    <locale android:name="it" />
+    <locale android:name="es" />
+    <locale android:name="fi" />
+</locale-config>
