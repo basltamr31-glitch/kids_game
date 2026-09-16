@@ -52,8 +52,15 @@ cp -r android-res/android/* android/app/src/main/res/
 Create `android/local.properties`:
 
 ```properties
-sdk.dir=C:\\Users\\you\\AppData\\Local\\Android\\Sdk
+sdk.dir=C:/Users/you/AppData/Local/Android/Sdk
 ```
+
+**Use forward slashes.** A `.properties` file treats backslash as an escape
+character, so `C:\Users\...` is silently mangled (`\U` is consumed and `\b` is a
+backspace). Gradle then fails with the thoroughly unhelpful
+`java.io.IOException: The filename, directory name, or volume label syntax is
+incorrect`. The same applies to `org.gradle.java.home` in
+`android/gradle.properties`.
 
 ### Build
 
@@ -90,17 +97,22 @@ is actually increasing:
 powershell -Command "Get-Process java | Select Id,CPU,WorkingSet"
 ```
 
-The usual cause is a force-killed JVM leaving orphaned lock files. Fix:
+The usual cause is a force-killed JVM leaving orphaned lock files. Recover in
+this order — the first step is the one that avoids recreating the problem:
 
 ```bash
+cd android && ./gradlew --stop      # clean shutdown; releases locks properly
+
+# only if a JVM still will not exit — this is what orphans locks:
 taskkill //F //IM java.exe
 rm -rf android/.gradle
 find ~/.gradle/caches -name "*.lock" -delete
 cd android && ./gradlew assembleDebug --no-daemon
 ```
 
-Never `kill` a Gradle daemon to free a lock — use `./gradlew --stop`, which
-shuts it down cleanly and releases what it holds.
+Reach for `./gradlew --stop` before `taskkill`. Force-killing the daemon is what
+orphans the locks in the first place, so using it as the routine fix guarantees
+you will be back here.
 
 ### Signing a release
 
