@@ -30,6 +30,7 @@ and an Android project configured for release.
 
 ```
  61 fps · 148 draw calls · 266K triangles · ~200 KB gzipped · 51 tests passing
+ Android debug APK builds clean: 4.0 MB, 227 Gradle tasks
 ```
 
 Every model, animation, texture, sound and piece of music is **generated in

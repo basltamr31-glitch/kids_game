@@ -74,6 +74,34 @@ android/app/build/outputs/apk/release/app-release.apk
 android/app/build/outputs/bundle/release/app-release.aab
 ```
 
+A debug build has been run and verified on this project: **4.0 MB, 444 entries,
+227 Gradle tasks, 8m 32s** on a cold cache. The archive was checked to contain
+the web bundle under `assets/public/` and the vector adaptive icon under
+`res/mipmap-anydpi-v26/`.
+
+### If the build hangs
+
+Symptom: Gradle prints a task such as `:app:mergeLibDexDebug` and then sits
+there. The tell is **CPU time, not memory** — check whether the JVM's total CPU
+is actually increasing:
+
+```bash
+# run twice, a minute apart; if CPU barely moves, it is deadlocked, not working
+powershell -Command "Get-Process java | Select Id,CPU,WorkingSet"
+```
+
+The usual cause is a force-killed JVM leaving orphaned lock files. Fix:
+
+```bash
+taskkill //F //IM java.exe
+rm -rf android/.gradle
+find ~/.gradle/caches -name "*.lock" -delete
+cd android && ./gradlew assembleDebug --no-daemon
+```
+
+Never `kill` a Gradle daemon to free a lock — use `./gradlew --stop`, which
+shuts it down cleanly and releases what it holds.
+
 ### Signing a release
 
 ```bash
