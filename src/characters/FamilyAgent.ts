@@ -211,6 +211,16 @@ export class FamilyAgent {
   private greetCooldown = 0;
   private isGreeting = false;
   private greetTimer = 0;
+
+  /**
+   * Set while the child is busy with something close by.
+   *
+   * A parent who carries on hammering while their four-year-old milks a cow
+   * two metres away is not paying attention to their child. Watching costs a
+   * paused chore and a turned head, and it is the clearest signal in the game
+   * that the family notices what the child does.
+   */
+  private watching = false;
   private idleShuffle = 0;
 
   /** The round of chores for this phase, and where in it they are. */
@@ -349,6 +359,53 @@ export class FamilyAgent {
     this.held = tool;
   }
 
+  /**
+   * Stops work to watch the child, or goes back to it.
+   *
+   * The chore timer is deliberately left alone: they pick up exactly where
+   * they left off rather than losing the job they were part-way through.
+   */
+  setWatching(watching: boolean): void {
+    if (this.watching === watching) return;
+    this.watching = watching;
+    if (watching) {
+      this.rig.setExpression('curious');
+    } else {
+      this.rig.setExpression('neutral');
+      // Resume the chore clip on the next frame of movement.
+      this.rig.play(this.workClip);
+    }
+  }
+
+  get isWatching(): boolean {
+    return this.watching;
+  }
+
+  /**
+   * Reacts to the child finishing something.
+   *
+   * `praise` is the loud one, for a job that helped: they stop, turn, cheer
+   * and say so. `interest` is the quiet one, for play and discoveries, where
+   * a cheer every time would wear thin fast.
+   */
+  celebrate(kind: 'praise' | 'interest', textKey: string | null): void {
+    this.isGreeting = true;
+    this.greetTimer = kind === 'praise' ? 2.8 : 2.0;
+    this.greetCooldown = kind === 'praise' ? 14 : 20;
+    this.rig.play(kind === 'praise' ? 'cheer' : 'wave', true);
+    this.rig.setExpression(kind === 'praise' ? 'delighted' : 'happy');
+    this.pendingLine = textKey;
+  }
+
+  /** Line to speak, consumed by whoever owns the speech bubble. */
+  takeLine(): string | null {
+    const line = this.pendingLine;
+    this.pendingLine = null;
+    return line;
+  }
+
+  private pendingLine: string | null = null;
+
   /** Waves and smiles at the child. Called by the interaction system. */
   greet(): void {
     if (this.greetCooldown > 0 || this.isGreeting) return;
@@ -380,15 +437,20 @@ export class FamilyAgent {
       this.speed = damp(this.speed, 0, 10, dt);
       if (this.greetTimer <= 0) {
         this.isGreeting = false;
-        this.rig.setExpression('neutral');
+        this.rig.setExpression(this.watching ? 'curious' : 'neutral');
       }
+    } else if (this.watching) {
+      // Downed tools, turned toward the child. The chore timer is untouched.
+      this.speed = damp(this.speed, 0, 10, dt);
+      this.faceToward(childPosition);
+      if (this.rig.currentClip !== 'idle') this.rig.play('idle');
     } else {
       this.moveTowardTarget(dt);
     }
 
     // Wave when the child first comes close, without being asked.
     const distance = this.position.distanceTo(childPosition);
-    if (distance < 4.5 && this.greetCooldown <= 0 && !this.isGreeting) {
+    if (distance < 4.5 && this.greetCooldown <= 0 && !this.isGreeting && !this.watching) {
       this.greet();
     }
 

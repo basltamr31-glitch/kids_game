@@ -26,6 +26,7 @@ import { WeatherSystem } from '../gameplay/WeatherSystem';
 import { InteractableRegistry } from '../gameplay/interact/Interactable';
 import { InteractionRunner } from '../gameplay/interact/InteractionRunner';
 import { ChildNotices } from '../gameplay/ChildNotices';
+import { ParentReactions } from '../gameplay/ParentReactions';
 import { buildHouseInteractions, type HouseState } from '../world/HouseInteractions';
 import { buildFarmInteractions, type FarmState } from '../world/FarmInteractions';
 import { AnimalAgent } from '../animals/AnimalAgent';
@@ -79,6 +80,7 @@ export class Game {
   private registry = new InteractableRegistry();
   private runner!: InteractionRunner;
   private notices!: ChildNotices;
+  private parentReactions!: ParentReactions;
   private house!: HouseState;
   private farm!: FarmState;
   private ui!: UIRoot;
@@ -242,6 +244,9 @@ export class Game {
       ctx.worldRng.fork('notices'),
       this.world.ambient.group,
     );
+
+    // Mum and Dad watch what the child is doing, and react when it is done.
+    this.parentReactions = new ParentReactions(ctx, this.parents, () => this.player.position);
 
     this.interaction = new InteractionSystem(ctx, {
       player: this.player,
@@ -874,6 +879,8 @@ export class Game {
     this.input.dispose();
     this.layout.dispose();
     this.ui.dispose();
+    // Holds bus subscriptions, so it has to let go of them explicitly.
+    this.parentReactions.dispose();
     this.player.dispose();
     for (const animal of this.animals.values()) animal.rig.group.clear();
     for (const parent of this.parents.values()) parent.dispose();
