@@ -7,6 +7,13 @@ import { PartBuilder } from '../art/MeshKit';
 import { SKIN_TONES, HAIR_COLORS, OUTFIT_PRIMARY, OUTFIT_SECONDARY } from '../art/Palette';
 import type { CharacterAppearance } from '../save/SaveSchema';
 import { LAYOUT } from '../world/WorldBuilder';
+import {
+  DOOR_HALF_WIDTH,
+  HOUSE_HALF_X,
+  HOUSE_HALF_Z,
+  isInsideHouse,
+  routeThroughDoor,
+} from '../world/HouseNav';
 import type { Seat } from './interact/Interactable';
 
 /**
@@ -29,22 +36,6 @@ const BLOCKERS: { centre: Vector3; radiusX: number; radiusZ: number }[] = [
   { centre: LAYOUT.trough.clone(), radiusX: 1.9, radiusZ: 1.0 },
 ];
 
-/** Walls of the house; the doorway gap is handled explicitly. */
-const HOUSE_HALF_X = 7.2;
-const HOUSE_HALF_Z = 5.7;
-const DOOR_HALF_WIDTH = 1.5;
-
-/**
- * Waypoints either side of the front door.
- *
- * The house has solid walls and the game has no navmesh, so a child told to
- * walk to the kitchen from the farmyard would slide along the outside wall and
- * stop. Routing through these two points is all the navigation this world
- * actually needs: there is exactly one building you can enter, with exactly one
- * door, and everything else is open ground.
- */
-const DOOR_OUTSIDE = new Vector3(LAYOUT.house.x, 0, LAYOUT.house.z + HOUSE_HALF_Z + 1.4);
-const DOOR_INSIDE = new Vector3(LAYOUT.house.x, 0, LAYOUT.house.z + HOUSE_HALF_Z - 1.5);
 
 export class Player {
   readonly group = new Group();
@@ -115,13 +106,7 @@ export class Player {
    * are on the same side of the front wall.
    */
   private routeTo(destination: Vector3): Vector3[] {
-    const fromInside = this.isInsideHouse(this.position.x, this.position.z);
-    const toInside = this.isInsideHouse(destination.x, destination.z);
-    if (fromInside === toInside) return [destination];
-
-    const a = fromInside ? DOOR_INSIDE : DOOR_OUTSIDE;
-    const b = fromInside ? DOOR_OUTSIDE : DOOR_INSIDE;
-    return [a.clone(), b.clone(), destination];
+    return routeThroughDoor(this.position, destination);
   }
 
   stop(): void {
@@ -319,9 +304,7 @@ export class Player {
   }
 
   isInsideHouse(x = this.position.x, z = this.position.z): boolean {
-    return (
-      Math.abs(x - LAYOUT.house.x) < HOUSE_HALF_X && Math.abs(z - LAYOUT.house.z) < HOUSE_HALF_Z
-    );
+    return isInsideHouse(x, z);
   }
 
   /**

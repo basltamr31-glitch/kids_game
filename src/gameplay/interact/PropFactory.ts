@@ -34,7 +34,9 @@ export type PropKind =
   | 'toothbrush'
   | 'towel'
   | 'wateringCan'
-  | 'teddy';
+  | 'teddy'
+  | 'broom'
+  | 'hammer';
 
 type Builder = () => Object3D;
 
@@ -272,6 +274,35 @@ const BUILDERS: Record<PropKind, Builder> = {
       b.box(0.018, 0.012, 0.004, 'wallPlaster', { pos: [0, 0.022, 0.045 + i * 0.007] });
     }
     return b.toMesh('toothbrush', M.painted(), { smooth: true });
+  },
+
+  /**
+   * A broom and a hammer, for the parents.
+   *
+   * The `sweep` and `hammer` clips were being played with empty hands, which
+   * is mime rather than work. Both are held part-way up the shaft, so the
+   * origin sits at the grip rather than at the foot of the handle.
+   */
+  broom: () => {
+    const b = new PartBuilder();
+    b.cylinder(0.016, 0.014, 0.92, 'woodMid', { pos: [0, 0.16, 0] }, 7);
+    // Head, swept back from the shaft.
+    b.bevelBox(0.2, 0.05, 0.07, 0.012, 'woodDark', { pos: [0, -0.3, 0.02] });
+    for (let i = 0; i < 7; i++) {
+      b.box(0.022, 0.16, 0.05, 'grassDry', {
+        pos: [-0.085 + i * 0.028, -0.4, 0.02],
+        rot: [0.12, 0, (i - 3) * 0.04],
+      });
+    }
+    return b.toMesh('broom', M.built('wood', 1.2), { smooth: false });
+  },
+
+  hammer: () => {
+    const b = new PartBuilder();
+    b.cylinder(0.015, 0.013, 0.28, 'woodWarm', { pos: [0, 0.04, 0] }, 7);
+    b.bevelBox(0.05, 0.05, 0.13, 0.012, 'metalDark', { pos: [0, 0.2, 0.01] });
+    b.bevelBox(0.045, 0.045, 0.04, 0.01, 'metal', { pos: [0, 0.2, 0.08] });
+    return b.toMesh('hammer', M.built('wood', 1.0), { smooth: false });
   },
 
   towel: () => {
