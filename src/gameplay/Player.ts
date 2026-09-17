@@ -153,6 +153,11 @@ export class Player {
     return this.carrying;
   }
 
+  /** Which way the body is turned, in radians. Head tracking is relative to it. */
+  get facingAngle(): number {
+    return this.facing;
+  }
+
   get isSeated(): boolean {
     return this.seat !== null;
   }

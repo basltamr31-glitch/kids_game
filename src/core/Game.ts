@@ -25,6 +25,7 @@ import { DayDirector } from '../gameplay/DayDirector';
 import { WeatherSystem } from '../gameplay/WeatherSystem';
 import { InteractableRegistry } from '../gameplay/interact/Interactable';
 import { InteractionRunner } from '../gameplay/interact/InteractionRunner';
+import { ChildNotices } from '../gameplay/ChildNotices';
 import { buildHouseInteractions, type HouseState } from '../world/HouseInteractions';
 import { buildFarmInteractions, type FarmState } from '../world/FarmInteractions';
 import { AnimalAgent } from '../animals/AnimalAgent';
@@ -77,6 +78,7 @@ export class Game {
   private weather!: WeatherSystem;
   private registry = new InteractableRegistry();
   private runner!: InteractionRunner;
+  private notices!: ChildNotices;
   private house!: HouseState;
   private farm!: FarmState;
   private ui!: UIRoot;
@@ -231,6 +233,15 @@ export class Game {
       camera: this.cameraRig,
     });
     this.attachRoutines();
+
+    // The child notices things on their own: a butterfly going past, an animal
+    // that has wandered up, the mountains when they have been still a while.
+    this.notices = new ChildNotices(
+      this.player,
+      this.animals,
+      ctx.worldRng.fork('notices'),
+      this.world.ambient.group,
+    );
 
     this.interaction = new InteractionSystem(ctx, {
       player: this.player,
@@ -572,6 +583,14 @@ export class Game {
       runner: this.runner,
     });
     this.attachRoutines();
+
+    // Rebind to the new player; the notices hold a direct reference.
+    this.notices = new ChildNotices(
+      this.player,
+      this.animals,
+      this.ctx.worldRng.fork('notices'),
+      this.world.ambient.group,
+    );
   }
 
   private openNatureBook(): void {
@@ -785,6 +804,7 @@ export class Game {
     this.house.update(dt, this.player.position);
     this.runner.update(dt);
     this.activities.update(dt);
+    this.notices.update(dt, this.runner.isRunning || this.activities.isRunning);
     this.player.update(dt);
 
     const isNight = this.director.currentPhase === 'night';
