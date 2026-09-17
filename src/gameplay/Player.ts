@@ -47,7 +47,6 @@ export class Player {
   private speed = 0;
   private facing = 0;
   private terrain: Terrain;
-  private footstepTimer = 0;
   private scripted = false;
 
   /** Set by the interaction system when a walk is part of an activity. */
@@ -62,6 +61,7 @@ export class Player {
     this.position.copy(spawn);
     this.position.y = terrain.heightAt(spawn.x, spawn.z);
     this.group.position.copy(this.position);
+    this.bindFootsteps();
   }
 
   get isMoving(): boolean {
@@ -114,7 +114,7 @@ export class Player {
   /** Attaches a small prop to the child's hand. */
   carry(itemId: string | null): void {
     if (this.carried) {
-      this.rig.joints.handR.remove(this.carried);
+      this.rig.joints.holdR.remove(this.carried);
       disposeObject(this.carried);
       this.carried = null;
     }
@@ -124,7 +124,7 @@ export class Player {
     const prop = buildCarriedProp(itemId);
     if (prop) {
       this.carried = prop;
-      this.rig.joints.handR.add(prop);
+      this.rig.joints.holdR.add(prop);
     }
   }
 
@@ -149,7 +149,6 @@ export class Player {
       else this.rig.play('idle');
     }
 
-    this.updateFootsteps(dt);
     this.rig.update(dt, this.speed);
   }
 
@@ -186,16 +185,15 @@ export class Player {
     this.velocity.set(dx, 0, dz).normalize().multiplyScalar(this.speed);
   }
 
-  private updateFootsteps(dt: number): void {
-    if (this.speed < 0.2) {
-      this.footstepTimer = 0;
-      return;
-    }
-    // Cadence matches the walk cycle so the sound lands with the foot.
-    this.footstepTimer -= dt * (this.speed > 2.6 ? 3.4 : 2.2);
-    if (this.footstepTimer > 0) return;
-    this.footstepTimer = 1;
-    this.onFootstep?.(this.surfaceUnderfoot());
+  /**
+   * Footsteps are driven by the animation rather than a parallel timer, so the
+   * sound lands on the frame the foot actually plants. The rig raises
+   * `onFootPlant` at each stride crossing.
+   */
+  private bindFootsteps(): void {
+    this.rig.onFootPlant = () => {
+      this.onFootstep?.(this.surfaceUnderfoot());
+    };
   }
 
   surfaceUnderfoot(): Surface {

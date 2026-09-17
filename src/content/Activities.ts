@@ -57,7 +57,7 @@ export const ACTIVITIES: ActivityDefinition[] = [
       { kind: 'walkTo', target: 'dinnertable' },
       { kind: 'face', target: 'mother' },
       { kind: 'speech', target: 'mother', textKey: 'speech.mother.goodmorning', duration: 2.4 },
-      { kind: 'animate', clip: 'eat', duration: 2.4 },
+      { kind: 'animate', clip: 'sitEat', duration: 2.4 },
       { kind: 'emote', target: 'child', emote: '😊', duration: 1.2 },
     ],
     rewards: { hearts: 1 },
@@ -469,7 +469,7 @@ export const ACTIVITIES: ActivityDefinition[] = [
     steps: [
       { kind: 'walkTo', target: 'dinnertable' },
       { kind: 'speech', target: 'mother', textKey: 'speech.mother.dinner', duration: 2.4 },
-      { kind: 'animate', clip: 'eat', duration: 3.0 },
+      { kind: 'animate', clip: 'sitEat', duration: 3.0 },
       { kind: 'emote', target: 'child', emote: '😋', duration: 1.4 },
     ],
     rewards: { hearts: 3 },
@@ -486,7 +486,7 @@ export const ACTIVITIES: ActivityDefinition[] = [
     anchor: 'bathroom',
     steps: [
       { kind: 'walkTo', target: 'bathroom' },
-      { kind: 'animate', clip: 'brush', duration: 2.6 },
+      { kind: 'animate', clip: 'brushTeeth', duration: 2.6 },
       { kind: 'emote', target: 'child', emote: '✨', duration: 1.2 },
     ],
     rewards: { hearts: 1 },

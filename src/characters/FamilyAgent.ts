@@ -229,7 +229,9 @@ export class FamilyAgent {
       const dx = childPosition.x - this.position.x;
       const dz = childPosition.z - this.position.z;
       const relative = Math.atan2(dx, dz) - this.group.rotation.y;
-      this.rig.lookAt(wrapAngle(relative), 0.05, dt);
+      this.rig.lookTowards(wrapAngle(relative), 0.05, 1);
+    } else {
+      this.rig.clearLook();
     }
 
     const groundY = this.terrain.heightAt(this.position.x, this.position.z);

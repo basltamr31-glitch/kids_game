@@ -315,12 +315,15 @@ export class ActivitySystem {
         this.ctx.audio.play('milk');
         break;
       case 'crouchPick':
+      case 'pickUpLow':
+      case 'pickUpHigh':
         this.ctx.audio.play('rustle');
         break;
       case 'scatter':
         this.ctx.audio.play('rustle');
         break;
-      case 'brush':
+      case 'brushTeeth':
+      case 'washHands':
         this.ctx.audio.play('water');
         break;
       case 'sleep':
