@@ -198,25 +198,6 @@ export function buildWorld(
   garden.position.y = terrain.heightAt(LAYOUT.garden.x, LAYOUT.garden.z);
   seasonal.add(garden);
 
-  /* ---------------- orchard ---------------- */
-  const orchard = new Group();
-  orchard.name = 'orchard';
-  const appleGeo = buildAppleTree(rng.fork('apple'), quality.treeDetail, season);
-  for (let row = 0; row < 3; row++) {
-    for (let col = 0; col < 3; col++) {
-      const x = LAYOUT.appleTree.x + col * 5.5 + (row % 2) * 1.5;
-      const z = LAYOUT.appleTree.z + row * 5.5;
-      const tree = new ThreeMesh(appleGeo, M.foliage(0.55));
-      tree.position.set(x, terrain.heightAt(x, z) - 0.2, z);
-      tree.rotation.y = rng.range(0, Math.PI * 2);
-      tree.scale.setScalar(rng.range(0.85, 1.1));
-      tree.castShadow = true;
-      tree.receiveShadow = true;
-      orchard.add(tree);
-    }
-  }
-  seasonal.add(orchard);
-
   /* ---------------- fences ---------------- */
   // Pasture enclosure, with a gap on the farmyard side so the child can walk in.
   const fenceRng = rng.fork('fences');
@@ -317,65 +298,10 @@ export function buildWorld(
     ),
   );
 
-  // Woodland closing off the valley sides.
-  const treeCount = quality.treeDetail === 0 ? 34 : quality.treeDetail === 1 ? 60 : 90;
-  seasonal.add(
-    plantTrees(
-      rng.fork('trees-east'),
-      terrain,
-      {
-        count: treeCount,
-        bounds: { minX: 34, maxX: 72, minZ: -56, maxZ: 78 },
-        accept: (x, z) => terrain.heightAt(x, z) < 26 && insideBuildings(x, z),
-      },
-      quality,
-      season,
-      'mixed',
-    ),
-  );
-  seasonal.add(
-    plantTrees(
-      rng.fork('trees-west'),
-      terrain,
-      {
-        count: treeCount,
-        bounds: { minX: -74, maxX: -38, minZ: -56, maxZ: 70 },
-        accept: (x, z) => terrain.heightAt(x, z) < 26,
-      },
-      quality,
-      season,
-      'conifer',
-    ),
-  );
-  seasonal.add(
-    plantTrees(
-      rng.fork('trees-north'),
-      terrain,
-      {
-        count: Math.floor(treeCount * 0.7),
-        bounds: { minX: -60, maxX: 60, minZ: 72, maxZ: 92 },
-      },
-      quality,
-      season,
-      'conifer',
-    ),
-  );
-  // The south rim closes the ring. Without it the ridge behind the farmyard is
-  // bare ground with a hard edge against the sky, which is the first thing the
-  // camera sees when it swings round behind the child.
-  seasonal.add(
-    plantTrees(
-      rng.fork('trees-south'),
-      terrain,
-      {
-        count: Math.floor(treeCount * 0.7),
-        bounds: { minX: -64, maxX: 64, minZ: -92, maxZ: -54 },
-      },
-      quality,
-      season,
-      'conifer',
-    ),
-  );
+  // Woodland closing off the valley sides, plus the orchard. Kept out of the
+  // corridor the doll's-house camera looks down when the child is indoors.
+  const blocksView = makeViewCorridorTest(cutaways);
+  plantAllTrees(seasonal, rng, terrain, quality, season, insideBuildings, blocksView);
 
   root.add(seasonal);
 
@@ -452,6 +378,131 @@ function near(x: number, z: number, point: Vector3, radius: number): boolean {
  * Fades a building's shell out as the child gets close to its centre, which
  * reveals the interior without any camera trickery or scene switching.
  */
+
+/**
+ * True where a tree would stand between the doll's-house camera and a
+ * building's open face.
+ *
+ * Indoors the camera parks itself off the building's open side at a known
+ * distance and looks straight in (see `CameraRig.setIndoor`). That sight line
+ * is fixed and known at build time, so the honest fix for a tree growing
+ * through the middle of the interior shot is not to fade it at runtime but to
+ * not plant it there. The corridor stops just past where the camera stands;
+ * anything further out is behind the lens.
+ */
+function makeViewCorridorTest(
+  cutaways: BuiltWorld['cutaways'],
+): (x: number, z: number) => boolean {
+  const lanes = cutaways.map((cutaway) => ({
+    centre: cutaway.centre,
+    dirX: Math.sin(cutaway.openTheta),
+    dirZ: Math.cos(cutaway.openTheta),
+    depth: cutaway.radius + 3,
+  }));
+  return (x, z) => {
+    for (const lane of lanes) {
+      const dx = x - lane.centre.x;
+      const dz = z - lane.centre.z;
+      const along = dx * lane.dirX + dz * lane.dirZ;
+      if (along < 1 || along > lane.depth) continue;
+      // Perpendicular distance from the centre line of the shot.
+      const lateral = Math.abs(dx * lane.dirZ - dz * lane.dirX);
+      if (lateral < 6) return true;
+    }
+    return false;
+  };
+}
+
+/**
+ * Every tree in the valley, in one place.
+ *
+ * The initial build and the season rebuild both need exactly this, and when
+ * they each had their own copy they drifted: the orchard and the south rim
+ * existed only on first build and vanished at the first change of season.
+ */
+function plantAllTrees(
+  target: Group,
+  rng: Rng,
+  terrain: Terrain,
+  quality: QualitySettings,
+  season: Season,
+  insideBuildings: (x: number, z: number) => boolean,
+  blocksView: (x: number, z: number) => boolean,
+): void {
+  const treeCount = quality.treeDetail === 0 ? 34 : quality.treeDetail === 1 ? 60 : 90;
+  const open = (x: number, z: number): boolean => !blocksView(x, z);
+
+  const bands = [
+    {
+      label: 'east',
+      count: treeCount,
+      bounds: { minX: 34, maxX: 72, minZ: -56, maxZ: 78 },
+      kind: 'mixed' as const,
+      accept: (x: number, z: number) =>
+        terrain.heightAt(x, z) < 26 && insideBuildings(x, z) && open(x, z),
+    },
+    {
+      label: 'west',
+      count: treeCount,
+      bounds: { minX: -74, maxX: -38, minZ: -56, maxZ: 70 },
+      kind: 'conifer' as const,
+      accept: (x: number, z: number) => terrain.heightAt(x, z) < 26 && open(x, z),
+    },
+    {
+      label: 'north',
+      count: Math.floor(treeCount * 0.7),
+      bounds: { minX: -60, maxX: 60, minZ: 72, maxZ: 92 },
+      kind: 'conifer' as const,
+      accept: open,
+    },
+    // The south rim closes the ring. Without it the ridge behind the farmyard
+    // is bare ground with a hard edge against the sky, which is the first thing
+    // the camera sees when it swings round behind the child.
+    {
+      label: 'south',
+      count: Math.floor(treeCount * 0.7),
+      bounds: { minX: -64, maxX: 64, minZ: -92, maxZ: -54 },
+      kind: 'conifer' as const,
+      accept: open,
+    },
+  ];
+
+  for (const band of bands) {
+    target.add(
+      plantTrees(
+        rng.fork(`trees-${band.label}-${season}`),
+        terrain,
+        { count: band.count, bounds: band.bounds, accept: band.accept },
+        quality,
+        season,
+        band.kind,
+      ),
+    );
+  }
+
+  /* ---------------- orchard ---------------- */
+  const orchard = new Group();
+  orchard.name = 'orchard';
+  const appleGeo = buildAppleTree(rng.fork(`apple-${season}`), quality.treeDetail, season);
+  for (let row = 0; row < 3; row++) {
+    for (let col = 0; col < 3; col++) {
+      const x = LAYOUT.appleTree.x + col * 5.5 + (row % 2) * 1.5;
+      const z = LAYOUT.appleTree.z + row * 5.5;
+      // A gap in a row of fruit trees reads as a tree that died; a tree growing
+      // through the middle of the kitchen does not.
+      if (blocksView(x, z)) continue;
+      const tree = new ThreeMesh(appleGeo, M.foliage(0.55));
+      tree.position.set(x, terrain.heightAt(x, z) - 0.2, z);
+      tree.rotation.y = rng.range(0, Math.PI * 2);
+      tree.scale.setScalar(rng.range(0.85, 1.1));
+      tree.castShadow = true;
+      tree.receiveShadow = true;
+      orchard.add(tree);
+    }
+  }
+  target.add(orchard);
+}
+
 export function updateCutaways(
   world: BuiltWorld,
   childPosition: Vector3,
@@ -555,27 +606,15 @@ export function rebuildSeasonalContent(
   garden.position.y = world.terrain.heightAt(LAYOUT.garden.x, LAYOUT.garden.z);
   world.seasonal.add(garden);
 
-  const treeCount = quality.treeDetail === 0 ? 34 : quality.treeDetail === 1 ? 60 : 90;
-  for (const [label, bounds, kind] of [
-    ['east', { minX: 34, maxX: 72, minZ: 20, maxZ: 78 }, 'mixed'],
-    ['west', { minX: -74, maxX: -38, minZ: -20, maxZ: 70 }, 'conifer'],
-    ['north', { minX: -60, maxX: 60, minZ: 72, maxZ: 92 }, 'conifer'],
-  ] as const) {
-    world.seasonal.add(
-      plantTrees(
-        rng.fork(`trees-${label}-${season}`),
-        world.terrain,
-        {
-          count: treeCount,
-          bounds,
-          accept: (x, z) => world.terrain.heightAt(x, z) < 26,
-        },
-        quality,
-        season,
-        kind,
-      ),
-    );
-  }
+  plantAllTrees(
+    world.seasonal,
+    rng,
+    world.terrain,
+    quality,
+    season,
+    insideBuildings,
+    makeViewCorridorTest(world.cutaways),
+  );
 }
 
 function disposeGroup(group: Object3D): void {
