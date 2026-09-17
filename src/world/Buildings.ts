@@ -39,7 +39,15 @@ export function buildChalet(rng: Rng): BuildingResult {
   const H1 = 3.2; // ground floor height
   const H2 = 2.9; // upper floor height
 
-  const shellMaterial = surface({ vertexColors: true, transparent: true, opacity: 1, unique: true });
+  const shellMaterial = surface({
+    vertexColors: true,
+    transparent: true,
+    opacity: 1,
+    unique: true,
+    detail: 'wood',
+    detailScale: 1.1,
+    detailStrength: 0.42,
+  });
 
   const b = new PartBuilder();
 
@@ -161,7 +169,7 @@ export function buildChalet(rng: Rng): BuildingResult {
     }
   }
 
-  const shell = new Mesh(b.build(), shellMaterial);
+  const shell = new Mesh(b.build({ groundY: 0 }), shellMaterial);
   shell.name = 'chalet-shell';
   shell.castShadow = true;
   shell.receiveShadow = true;
@@ -351,7 +359,7 @@ function buildChaletInterior(W: number, D: number, H1: number, upperY: number): 
   b.box(1.5, 2.2, 0.7, 'woodMid', { pos: [-4.0, uy + 1.1, -4.0] });
   b.box(2.0, 0.04, 1.6, 'meadowFlowerC', { pos: [0.0, uy + 0.08, 0.6] });
 
-  const mesh = new Mesh(b.build(), M.vertexPainted());
+  const mesh = new Mesh(b.build({ groundY: floorY }), M.built('wood', 1.6));
   mesh.name = 'chalet-interior';
   mesh.castShadow = false;
   mesh.receiveShadow = true;
@@ -370,7 +378,15 @@ export function buildBarn(rng: Rng): BuildingResult {
   const D = 10;
   const H = 4.6;
 
-  const shellMaterial = surface({ vertexColors: true, transparent: true, opacity: 1, unique: true });
+  const shellMaterial = surface({
+    vertexColors: true,
+    transparent: true,
+    opacity: 1,
+    unique: true,
+    detail: 'wood',
+    detailScale: 1.1,
+    detailStrength: 0.42,
+  });
   const b = new PartBuilder();
 
   b.box(W + 0.5, 0.6, D + 0.5, 'stoneFoundation', { pos: [0, 0.3, 0] });
@@ -417,7 +433,7 @@ export function buildBarn(rng: Rng): BuildingResult {
     });
   }
 
-  const shell = new Mesh(b.build(), shellMaterial);
+  const shell = new Mesh(b.build({ groundY: 0 }), shellMaterial);
   shell.name = 'barn-shell';
   shell.castShadow = true;
   shell.receiveShadow = true;
@@ -445,7 +461,7 @@ export function buildBarn(rng: Rng): BuildingResult {
     inner.cylinder(0.2, 0.2, 0.12, 'metalDark', { pos: [4.2, 1.6, -2.4 + i * 1.2] }, 10);
   }
 
-  const interior = new Mesh(inner.build(), M.vertexPainted());
+  const interior = new Mesh(inner.build({ groundY: 0.6 }), M.built('wood', 1.3));
   interior.name = 'barn-interior';
   interior.receiveShadow = true;
   group.add(interior);
@@ -497,7 +513,7 @@ export function buildCoop(): Group {
   b.box(1.2, 0.16, 0.5, 'woodDark', { pos: [-1.8, 0.1, 1.6] });
   b.box(1.05, 0.1, 0.36, 'hay', { pos: [-1.8, 0.2, 1.6] });
 
-  const mesh = new Mesh(b.build(), M.vertexPainted());
+  const mesh = new Mesh(b.build({ groundY: 0 }), M.built('wood', 1.4));
   mesh.castShadow = true;
   mesh.receiveShadow = true;
   group.add(mesh);

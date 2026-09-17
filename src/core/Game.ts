@@ -14,7 +14,8 @@ import { AdaptiveQualityMonitor, detectFormFactor, detectQualityTier, qualityFor
 import { Rng, clamp } from './Rng';
 
 import { buildWorld, updateCutaways, rebuildSeasonalContent, type BuiltWorld } from '../world/WorldBuilder';
-import { updateWind, resetWind } from '../world/Props';
+import { updateSharedUniforms, setMaterialQuality } from '../art/Materials';
+import { warmDetailTextures } from '../art/Textures';
 import { Player } from '../gameplay/Player';
 import { CameraRig } from '../gameplay/CameraRig';
 import { InputManager } from '../gameplay/InputManager';
@@ -122,6 +123,17 @@ export class Game {
     this.layout.apply();
     ctx.formFactor = this.layout.formFactor;
     document.body.classList.toggle('reduced-motion', ctx.save.settings.reducedMotion);
+
+    /* --- surface detail --- */
+    // Generated once, before any geometry asks for them, so nothing hitches
+    // mid-play. Detail mapping costs two texture samples per fragment, so the
+    // battery-saver tier drops it; the rim light is cheap enough to keep.
+    //
+    // NOTE: this is read at material-creation time, so it is fixed for the
+    // session. A mid-session quality change still moves the levers that
+    // dominate frame time (shadows, resolution, vegetation density).
+    setMaterialQuality({ detail: ctx.quality.tier !== 'low', rim: true });
+    warmDetailTextures();
 
     /* --- world --- */
     this.world = buildWorld(this.scene, ctx.worldRng.fork('world'), ctx.quality, save.season);
@@ -719,7 +731,7 @@ export class Game {
     // Wind strengthens with bad weather; grass and flowers react.
     this.windTime += dt;
     const gust = save.weather === 'rain' || save.weather === 'snow' ? 1.8 : 1.0;
-    updateWind(this.windTime, gust);
+    updateSharedUniforms(this.windTime, gust);
 
     // The cutaway follows the camera as well as the child: walking along an
     // outside wall can put the camera indoors, and a screen full of roof
@@ -748,7 +760,6 @@ export class Game {
     this.weather.dispose();
     this.world.sky.dispose();
     this.world.terrain.dispose();
-    resetWind();
     this.renderer.dispose();
   }
 

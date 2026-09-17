@@ -62,7 +62,12 @@ export function buildMountains(rng: Rng, quality: QualitySettings): Group {
     const haze = bandIndex / (bands.length - 1);
     fadeToward(merged, color('mountainFar'), haze * 0.55);
 
-    const material = surface({ vertexColors: true, fog: false, unique: true });
+    // Mountains are merged raw geometry with no aAO attribute, and AO would
+    // be meaningless at this distance anyway.
+    // Fog ON: at 150-320m these sit right in the fog falloff, which is what
+    // gives the valley genuine aerial perspective instead of a flat cut-out
+    // ridge pasted on the sky.
+    const material = surface({ vertexColors: true, unique: true, useAO: false, rim: 0 });
     const mesh = new Mesh(merged, material);
     mesh.name = `mountain-band-${bandIndex}`;
     mesh.castShadow = false;
@@ -189,6 +194,8 @@ export class Water {
       transparent: true,
       opacity: 0.86,
       unique: true,
+      useAO: false,
+      rim: 2.4,
     }) as Material & {
       onBeforeCompile: (shader: {
         uniforms: Record<string, { value: number }>;
@@ -236,7 +243,7 @@ export function buildStreamBank(rng: Rng, length: number): Mesh {
       5,
     );
   }
-  const mesh = new Mesh(b.build(), M.vertexPainted());
+  const mesh = new Mesh(b.build({ groundY: -0.2 }), M.rock());
   mesh.name = 'stream-bank';
   mesh.receiveShadow = true;
   return mesh;

@@ -13,6 +13,7 @@ import {
   AmbientLight,
 } from 'three';
 import { color } from '../art/Palette';
+import { setRimLight } from '../art/Materials';
 import { clamp01, lerp, type Rng } from '../core/Rng';
 import { skyColorsFor } from '../world/Sky';
 import type { Weather, Season } from '../save/SaveSchema';
@@ -58,6 +59,15 @@ const SUN_DISTANCE = 90;
 
 export class WeatherSystem {
   readonly sun: DirectionalLight;
+  /**
+   * Shadowless fill from roughly opposite the key.
+   *
+   * Standard three-point practice, and the single cheapest fix for surfaces
+   * that face away from the sun reading as dead grey. It costs one extra
+   * light term per fragment and buys back every shaded wall, flank and face
+   * in the game.
+   */
+  readonly fill: DirectionalLight;
   readonly hemisphere: HemisphereLight;
   readonly ambient: AmbientLight;
 
@@ -88,6 +98,11 @@ export class WeatherSystem {
     this.configureShadow();
     scene.add(this.sun);
     scene.add(this.sun.target);
+
+    this.fill = new DirectionalLight(color('horizonDay').getHex(), 0.4);
+    this.fill.castShadow = false;
+    scene.add(this.fill);
+    scene.add(this.fill.target);
 
     // Sky/ground bounce. On a stylized toon look this does most of the work of
     // a global illumination pass for essentially nothing.
@@ -195,11 +210,38 @@ export class WeatherSystem {
     this.sun.intensity = (0.25 + dayFactor * 1.55) * profile.sun;
 
     /* --- fill --- */
-    this.hemisphere.color.copy(sky.zenith);
+    // Mirrored through the vertical axis and pushed lower, so it rakes across
+    // exactly the faces the key light misses.
+    this.fill.position
+      .set(-sunDirection.x, Math.max(0.25, sunDirection.y * 0.35), -sunDirection.z)
+      .normalize()
+      .multiplyScalar(SUN_DISTANCE)
+      .add(cameraPosition);
+    this.fill.target.position.copy(cameraPosition);
+    this.fill.target.updateMatrixWorld();
+    // Takes the sky's colour but desaturated toward white, so it lifts shadows
+    // without painting them blue.
+    this.fill.color.copy(sky.zenith).lerp(color('sunWarm'), 0.55);
+    this.fill.intensity = (0.16 + dayFactor * 0.34) * profile.ambient;
+
+    /* --- fill --- */
+    // Desaturated toward white for the same reason as the fill: a fully
+    // saturated sky term tints every upward face blue.
+    this.hemisphere.color.copy(sky.zenith).lerp(color('wallPlaster'), 0.38);
     this.hemisphere.groundColor.copy(
       this.season === 'winter' ? color('snowShade') : color('grassDeep'),
     );
     this.hemisphere.intensity = (0.3 + (1 - dayFactor) * 0.22 + dayFactor * 0.35) * profile.ambient;
+
+    /* --- rim light --- */
+    // The rim is standing in for sky bounce, so it takes the sky's own colour.
+    // A low sun gives a warm gold edge; overcast gives a cold blue one; night
+    // gives a faint moon-silver one. This is most of what makes a silhouette
+    // read as three-dimensional against a bright background.
+    const rimTint = sky.zenith.clone().lerp(sky.horizon, 0.45);
+    const rimStrength =
+      (0.22 + (1 - Math.abs(elevation - 0.25) * 2) * 0.16) * (1 - profile.overcast * 0.35);
+    setRimLight(rimTint, Math.max(0.12, rimStrength));
 
     // Night never goes truly black — a child should always see their farm.
     const nightLift = 1 - dayFactor;
@@ -211,8 +253,11 @@ export class WeatherSystem {
     this.fog.color.copy(fogColor);
     const density = profile.fogDensity * this.quality.fogDensityScale;
     // Fog expressed as near/far from a density so the tuning reads naturally.
+    // Far is pushed well past the outermost mountain band. Tuned so the three
+    // ridges land at roughly 25% / 45% / 65% fogged: enough separation to read
+    // as distance, not so much that the farthest one dissolves into the sky.
     this.fog.near = lerp(60, 14, clamp01(density * 60));
-    this.fog.far = lerp(340, 90, clamp01(density * 60));
+    this.fog.far = lerp(520, 120, clamp01(density * 60));
 
     /* --- precipitation --- */
     this.updateParticles(dt, profile, cameraPosition);

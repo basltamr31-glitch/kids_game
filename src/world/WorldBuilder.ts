@@ -10,11 +10,13 @@ import {
   buildTrough,
   buildGarden,
   buildBridge,
-  buildGrassField,
+  buildGrassRings,
   buildScatterProps,
+  buildGroundClutter,
   buildRocks,
   plantTrees,
   buildAppleTree,
+  type GrassRing,
 } from './Props';
 import { M } from '../art/Materials';
 import { Mesh as ThreeMesh } from 'three';
@@ -54,6 +56,20 @@ export interface BuiltWorld {
   /** Everything that should be re-scattered when the season changes. */
   seasonal: Group;
 }
+
+/**
+ * Grass level-of-detail rings, centred on the farmyard.
+ *
+ * The near ring is where the child actually stands, so it gets curved
+ * multi-segment blades at high density. Beyond 30m nobody can resolve a blade,
+ * so those rings get flat cards scaled up to cover the same ground for a
+ * fraction of the vertices.
+ */
+const GRASS_RINGS: GrassRing[] = [
+  { inner: 0, outer: 26, blades: 5, curve: true, density: 1.0, wind: 1.0 },
+  { inner: 26, outer: 52, blades: 4, curve: false, density: 0.42, wind: 0.85 },
+  { inner: 52, outer: 88, blades: 3, curve: false, density: 0.16, wind: 0.7 },
+];
 
 /** Layout constants — one place to move a whole building. */
 export const LAYOUT = {
@@ -164,7 +180,7 @@ export function buildWorld(
     for (let col = 0; col < 3; col++) {
       const x = LAYOUT.appleTree.x + col * 5.5 + (row % 2) * 1.5;
       const z = LAYOUT.appleTree.z + row * 5.5;
-      const tree = new ThreeMesh(appleGeo, M.vertexPainted());
+      const tree = new ThreeMesh(appleGeo, M.foliage(0.55));
       tree.position.set(x, terrain.heightAt(x, z) - 0.2, z);
       tree.rotation.y = rng.range(0, Math.PI * 2);
       tree.scale.setScalar(rng.range(0.85, 1.1));
@@ -177,6 +193,7 @@ export function buildWorld(
 
   /* ---------------- fences ---------------- */
   // Pasture enclosure, with a gap on the farmyard side so the child can walk in.
+  const fenceRng = rng.fork('fences');
   root.add(
     buildFence(
       [
@@ -187,6 +204,7 @@ export function buildWorld(
         [11, 20],
       ],
       terrain,
+      fenceRng,
     ),
   );
   // Chicken run.
@@ -200,6 +218,7 @@ export function buildWorld(
         [-9, 18],
       ],
       terrain,
+      fenceRng,
     ),
   );
   // Garden edging.
@@ -213,6 +232,7 @@ export function buildWorld(
         [-26, 11],
       ],
       terrain,
+      fenceRng,
     ),
   );
 
@@ -230,12 +250,23 @@ export function buildWorld(
   const meadowBounds = { minX: -70, maxX: 70, minZ: -40, maxZ: 78 };
 
   seasonal.add(
-    buildGrassField(
+    buildGrassRings(
       rng.fork('grass'),
       terrain,
-      { count: quality.grassCount, bounds: meadowBounds, accept: insideBuildings },
+      { x: LAYOUT.yardCentre.x, z: LAYOUT.yardCentre.z },
+      GRASS_RINGS,
+      meadowBounds,
+      insideBuildings,
       season,
+      quality.grassCount,
     ),
+  );
+  seasonal.add(
+    buildGroundClutter(rng.fork('clutter'), terrain, {
+      count: Math.floor(quality.scatterCount * 0.6),
+      bounds: { minX: -34, maxX: 44, minZ: -22, maxZ: 46 },
+      accept: insideBuildings,
+    }),
   );
   seasonal.add(
     buildScatterProps(
@@ -420,12 +451,23 @@ export function rebuildSeasonalContent(
   const meadowBounds = { minX: -70, maxX: 70, minZ: -40, maxZ: 78 };
 
   world.seasonal.add(
-    buildGrassField(
+    buildGrassRings(
       rng.fork(`grass-${season}`),
       world.terrain,
-      { count: quality.grassCount, bounds: meadowBounds, accept: insideBuildings },
+      { x: LAYOUT.yardCentre.x, z: LAYOUT.yardCentre.z },
+      GRASS_RINGS,
+      meadowBounds,
+      insideBuildings,
       season,
+      quality.grassCount,
     ),
+  );
+  world.seasonal.add(
+    buildGroundClutter(rng.fork(`clutter-${season}`), world.terrain, {
+      count: Math.floor(quality.scatterCount * 0.6),
+      bounds: { minX: -34, maxX: 44, minZ: -22, maxZ: 46 },
+      accept: insideBuildings,
+    }),
   );
   world.seasonal.add(
     buildScatterProps(

@@ -57,7 +57,7 @@ export class Terrain {
     this.baseColors = new Float32Array(pos.count * 3);
     this.paint();
 
-    this.mesh = new Mesh(plane, M.vertexPainted());
+    this.mesh = new Mesh(plane, M.ground());
     this.mesh.name = 'terrain';
     this.mesh.receiveShadow = true;
     this.mesh.castShadow = false;

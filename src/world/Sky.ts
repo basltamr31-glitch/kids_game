@@ -115,8 +115,12 @@ export class Sky {
     const dayT = clamp01((hour - 5) / 14); // 05:00 sunrise .. 19:00 sunset
     const angle = dayT * Math.PI;
     const elevation = Math.sin(angle);
+    // The vertical component is deliberately capped and a constant southerly
+    // bias is kept. A sun that climbs to the zenith leaves every vertical wall
+    // lit only by the sky, which turns warm plaster a dead blue-grey at noon.
+    // A ~50-degree peak also matches the latitude these valleys actually sit at.
     this.sunDirection
-      .set(Math.cos(angle) * 0.82, Math.max(-0.35, elevation), 0.42)
+      .set(Math.cos(angle) * 0.95, Math.max(-0.35, elevation * 0.76), 0.58)
       .normalize();
 
     const u = this.domeMaterial.uniforms;
@@ -243,6 +247,8 @@ function buildClouds(rng: Rng): Group {
     opacity: 0.85,
     fog: false,
     unique: true,
+    useAO: false,
+    rim: 0,
   });
 
   const count = 9;
@@ -261,7 +267,7 @@ function buildClouds(rng: Rng): Group {
         8,
       );
     }
-    const geometry = builder.build();
+    const geometry = builder.build({ ao: false });
     // Flatten the underside so clouds read as a ceiling, not floating balls.
     const pos = geometry.attributes.position as BufferAttribute;
     for (let v = 0; v < pos.count; v++) {
