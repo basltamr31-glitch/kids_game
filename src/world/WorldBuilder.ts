@@ -51,8 +51,20 @@ export interface BuiltWorld {
   sky: Sky;
   water: Water;
   anchors: Map<string, Anchor>;
-  /** Buildings whose shells fade when the child is inside. */
-  cutaways: { result: BuildingResult; centre: Vector3; radius: number }[];
+  /**
+   * Buildings whose shells fade when the child is inside.
+   *
+   * `openTheta` is the orbit angle that puts the camera on the building's open
+   * face. A doll's-house interior keeps its back and side walls so the room
+   * reads as a room; only one face is left open, and a camera anywhere else is
+   * looking at the back of a solid wall however far the shell has faded.
+   */
+  cutaways: {
+    result: BuildingResult;
+    centre: Vector3;
+    radius: number;
+    openTheta: number;
+  }[];
   /** Everything that should be re-scattered when the season changes. */
   seasonal: Group;
 }
@@ -135,14 +147,25 @@ export function buildWorld(
   chalet.group.position.y = terrain.heightAt(LAYOUT.house.x, LAYOUT.house.z);
   chalet.group.rotation.y = LAYOUT.houseRotation;
   root.add(chalet.group);
-  cutaways.push({ result: chalet, centre: chalet.group.position.clone(), radius: 10 });
+  // The chalet's open face is +z (the door side), turned by its own rotation.
+  cutaways.push({
+    result: chalet,
+    centre: chalet.group.position.clone(),
+    radius: 10,
+    openTheta: LAYOUT.houseRotation,
+  });
 
   const barn = buildBarn(rng.fork('barn'));
   barn.group.position.copy(LAYOUT.barn);
   barn.group.position.y = terrain.heightAt(LAYOUT.barn.x, LAYOUT.barn.z);
   barn.group.rotation.y = LAYOUT.barnRotation;
   root.add(barn.group);
-  cutaways.push({ result: barn, centre: barn.group.position.clone(), radius: 9 });
+  cutaways.push({
+    result: barn,
+    centre: barn.group.position.clone(),
+    radius: 9,
+    openTheta: LAYOUT.barnRotation,
+  });
 
   const coop = buildCoop();
   coop.position.copy(LAYOUT.coop);
@@ -418,8 +441,8 @@ export function updateCutaways(
   childPosition: Vector3,
   cameraPosition: Vector3,
   dt: number,
-): boolean {
-  let anyInside = false;
+): BuiltWorld['cutaways'][number] | null {
+  let active: BuiltWorld['cutaways'][number] | null = null;
 
   for (const cutaway of world.cutaways) {
     const childDistance = childPosition.distanceTo(cutaway.centre);
@@ -430,20 +453,37 @@ export function updateCutaways(
       cameraPosition.z - cutaway.centre.z,
     );
     const inside = childDistance < cutaway.radius || cameraDistance < cutaway.radius * 0.95;
-    if (inside) anyInside = true;
+    // The child's own building wins; the camera merely clipping a wall does not
+    // get to drag the view round to that building's open face.
+    if (inside && (!active || childDistance < cutaway.radius)) active = cutaway;
 
     const targetOpacity = inside ? 0.08 : 1;
-    const material = cutaway.result.shellMaterial as Material & { opacity: number };
-    const next = material.opacity + (targetOpacity - material.opacity) * (1 - Math.exp(-6 * dt));
-    material.opacity = next;
-    material.transparent = next < 0.99;
-    // Stop the near walls writing depth once they are ghosts, or the interior
-    // would be z-fought into invisibility.
-    (material as unknown as { depthWrite: boolean }).depthWrite = next > 0.9;
+    const material = cutaway.result.shellMaterial as Material & {
+      opacity: number;
+      depthWrite: boolean;
+      needsUpdate: boolean;
+    };
+    let next = material.opacity + (targetOpacity - material.opacity) * (1 - Math.exp(-6 * dt));
+    // Settle exactly, so the material stops changing once the fade is over.
+    if (Math.abs(next - targetOpacity) < 0.004) next = targetOpacity;
+
+    if (next !== material.opacity) {
+      material.opacity = next;
+      material.transparent = next < 0.99;
+      // Stop the near walls writing depth once they are ghosts, or the interior
+      // would be z-fought into invisibility.
+      material.depthWrite = next > 0.9;
+      // three only re-uploads a material's uniforms when its version changes,
+      // so assigning `opacity` alone does nothing on the GPU: the walls stayed
+      // solid however far the number fell. Bumping the version is what actually
+      // applies it, and because the fade settles above, this runs only during
+      // the second or so it is moving rather than every frame forever.
+      material.needsUpdate = true;
+    }
     cutaway.result.shell.visible = next > 0.02;
   }
 
-  return anyInside;
+  return active;
 }
 
 /** Re-scatters everything season-dependent. Used on a season rollover. */

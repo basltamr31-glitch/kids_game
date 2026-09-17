@@ -1,4 +1,4 @@
-import { Group, Object3D, Vector3 } from 'three';
+import { Group, Object3D, Vector3, type Material } from 'three';
 import { PartBuilder } from '../art/MeshKit';
 import { M } from '../art/Materials';
 import {
@@ -470,6 +470,14 @@ export function buildDoor(
     hand: 1 | -1;
     openAngle?: number;
     tint?: string;
+    /**
+     * Material for the frame and leaf. Pass the building's shell material for
+     * an exterior door: a door set in a wall belongs to that wall, so it should
+     * ghost along with it when the cutaway opens the building up. Sharing the
+     * material is what makes that automatic rather than another list to keep
+     * in sync.
+     */
+    material?: Material;
   },
 ): { group: Group; hinge: Hinge; pivot: Object3D } {
   const group = new Group();
@@ -484,7 +492,7 @@ export function buildDoor(
     frame.bevelBox(0.14, h + 0.12, 0.22, 0.03, 'woodDark', { pos: [(fx * (w + 0.14)) / 2, h / 2, 0] });
   }
   frame.bevelBox(w + 0.28, 0.16, 0.22, 0.03, 'woodDark', { pos: [0, h + 0.06, 0] });
-  group.add(frame.toMesh(`${options.id}-frame`, M.built('wood', 2.0), { ao: false }));
+  group.add(frame.toMesh(`${options.id}-frame`, options.material ?? M.built('wood', 2.0), { ao: false }));
 
   const pivot = new Object3D();
   pivot.position.set((options.hand * w) / 2, 0, 0);
@@ -507,7 +515,7 @@ export function buildDoor(
     pos: [(-options.hand * w) / 2 + options.hand * -w * 0.38, h * 0.48, 0.06],
     rot: [Math.PI / 2, 0, 0],
   }, 6);
-  pivot.add(leaf.toMesh(`${options.id}-leaf`, M.built('wood', 2.2), { ao: false }));
+  pivot.add(leaf.toMesh(`${options.id}-leaf`, options.material ?? M.built('wood', 2.2), { ao: false }));
 
   const hinge = registry.addHinge(
     new Hinge(pivot, { open: options.hand * (options.openAngle ?? 1.9), speed: 2.6 }),

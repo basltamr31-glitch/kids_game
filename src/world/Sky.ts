@@ -147,7 +147,12 @@ export class Sky {
     const first = this.clouds.children[0] as Mesh | undefined;
     if (first) {
       // All banks share one material instance, so a single write fades them all.
-      (first.material as { opacity: number }).opacity = 0.35 + overcast * 0.6;
+      const material = first.material as unknown as { opacity: number; color: Color };
+      material.opacity = 0.35 + overcast * 0.6;
+      // Warm at dawn and dusk, white at midday, grey as the weather closes in.
+      _cloudTint.copy(zenith).lerp(sunTint, 0.55).lerp(CLOUD_WHITE, 0.45);
+      _cloudTint.multiplyScalar(1 - overcast * 0.3);
+      material.color.lerp(_cloudTint, 1 - Math.exp(-3 * dt));
     }
     this.clouds.visible = overcast > 0.04;
   }
@@ -235,18 +240,27 @@ function makeGlowSprite(hexColor: string, size: number): Sprite {
   return sprite;
 }
 
+const CLOUD_WHITE = new Color('#FFFFFF');
+const _cloudTint = new Color();
+
 /** Chunky stylized cloud banks made of overlapping spheres, far overhead. */
 function buildClouds(rng: Rng): Group {
   const group = new Group();
   group.name = 'clouds';
 
   // One shared, unique material so the weather system can fade every bank at once.
+  //
+  // Unlit on purpose. Toon-shaded clouds band hard, and with the sun low in the
+  // morning a cloud bank turns into a lumpy orange mass hanging over the
+  // valley. Clouds instead take their colour from the sky itself, which is
+  // where a cloud's colour actually comes from.
   const cloudMaterial = surface({
     vertexColors: true,
     transparent: true,
     opacity: 0.85,
     fog: false,
     unique: true,
+    unlit: true,
     useAO: false,
     rim: 0,
   });

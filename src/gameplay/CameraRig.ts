@@ -17,6 +17,24 @@ import type { FormFactor } from '../core/DeviceProfile';
 
 export type CameraMode = 'follow' | 'focus' | 'cinematic';
 
+const _roomLook = new Vector3();
+
+/**
+ * Pitch used once the child is fully indoors. The boom length comes from the
+ * building's own radius, since a chalet and a coop need very different ones.
+ *
+ * Only the outer shell ghosts; the upper floor is solid set dressing. So the
+ * camera must not climb to roof height looking for a top-down view, because
+ * there isn't one to be had — it would simply be inside the roof. This sits
+ * just above the ground-floor wall head and looks in over it, which is the
+ * angle a doll's house is actually viewed from.
+ */
+// Nearly level on purpose. The upper floor is a solid slab across the whole
+// footprint, so there is no view down into the ground floor to be had; the
+// only way in is through the open front, under that slab. This is what a
+// doll's house actually looks like — seen square on from the open side.
+const INDOOR_PHI = MathUtils.degToRad(81);
+
 export class CameraRig {
   readonly camera: PerspectiveCamera;
 
@@ -35,6 +53,22 @@ export class CameraRig {
 
   private minDistance = 6;
   private maxDistance = 20;
+
+  /**
+   * 0 outdoors .. 1 indoors, damped so the move through a doorway is a glide.
+   *
+   * The doll's-house cutaway ghosts the near walls, but that is worth nothing
+   * while the boom is still 12m out at eye level, because the camera is then
+   * simply outside the building looking at the back of an interior wall.
+   * Indoors the boom comes in and lifts to look down into the room.
+   */
+  private indoorBlend = 0;
+
+  /** Orbit angle of the current building's open face; see setIndoor. */
+  private indoorTheta = 0;
+  /** Centre of the building the child is in, and how far out to stand. */
+  private indoorCentre = new Vector3();
+  private indoorStandoff = 12;
 
   constructor(aspect: number, formFactor: FormFactor) {
     this.camera = new PerspectiveCamera(fovFor(formFactor), aspect, 0.4, 700);
@@ -102,6 +136,24 @@ export class CameraRig {
     return this.mode === 'focus';
   }
 
+  /**
+   * Tells the rig whether the child is inside a building.
+   * Driven from the same test that drives the cutaway, so the walls ghosting
+   * and the camera coming in are always the same event.
+   */
+  setIndoor(building: { centre: Vector3; radius: number; openTheta: number } | null, dt: number): void {
+    this.indoorBlend = damp(this.indoorBlend, building === null ? 0 : 1, 3.2, dt);
+    // Keep the last building's framing while the blend falls away, so stepping
+    // out of a door does not whip the camera round mid-fade.
+    if (building) {
+      this.indoorTheta = building.openTheta;
+      this.indoorCentre.copy(building.centre);
+      // Stand clear of the building itself. A boom measured from the child
+      // lands inside the walls whenever they are at the back of a deep room.
+      this.indoorStandoff = building.radius + 2;
+    }
+  }
+
   /** Small positive shake, used sparingly (a snowball landing, a door). */
   nudge(amount = 0.12): void {
     this.shake = Math.min(0.3, this.shake + amount);
@@ -135,10 +187,29 @@ export class CameraRig {
       desired.lerp(this.focusPoint, 0.22);
     }
 
+    // Indoors the shot is a doll's house: the camera stands off the building's
+    // open face and looks in at the whole room. It orbits the BUILDING, not the
+    // child, so the framing holds still while they move about inside, and so
+    // the boom cannot end up inside a wall when they are at the back of a deep
+    // room. Everything else about the interior is wasted if the camera is
+    // parked behind the one wall that stays solid.
+    const blend = this.indoorBlend;
+    const wantRadius = MathUtils.lerp(this.targetSpherical.radius, this.indoorStandoff, blend);
+    const wantPhi = MathUtils.lerp(this.targetSpherical.phi, INDOOR_PHI, blend);
+    const wantTheta = blend > 0.001
+      ? lerpAngle(this.targetSpherical.theta, this.indoorTheta, blend)
+      : this.targetSpherical.theta;
+    // Pull the look-at toward the room's middle so the child stays in frame
+    // wherever they are in it, without the camera chasing them around.
+    if (blend > 0.001) {
+      _roomLook.set(this.indoorCentre.x, this.indoorCentre.y + 1.5, this.indoorCentre.z);
+      desired.lerp(_roomLook, blend * 0.7);
+    }
+
     // Damp the orbit itself so even a flick reads as a smooth pan.
-    this.spherical.radius = damp(this.spherical.radius, this.targetSpherical.radius, 5, dt);
-    this.spherical.phi = damp(this.spherical.phi, this.targetSpherical.phi, 7, dt);
-    this.spherical.theta = dampAngle(this.spherical.theta, this.targetSpherical.theta, 7, dt);
+    this.spherical.radius = damp(this.spherical.radius, wantRadius, 5, dt);
+    this.spherical.phi = damp(this.spherical.phi, wantPhi, 7, dt);
+    this.spherical.theta = dampAngle(this.spherical.theta, wantTheta, 7, dt);
 
     this.lookAt.lerp(desired, 1 - Math.exp(-9 * dt));
 
@@ -187,6 +258,14 @@ export class CameraRig {
 function fovFor(formFactor: FormFactor): number {
   // Wider on a phone so the world still feels big on a small screen.
   return formFactor === 'tablet' ? 46 : formFactor === 'small-tablet' ? 50 : 54;
+}
+
+/** Interpolates along the shorter way round the circle. */
+function lerpAngle(from: number, to: number, t: number): number {
+  let delta = (to - from) % (Math.PI * 2);
+  if (delta > Math.PI) delta -= Math.PI * 2;
+  if (delta < -Math.PI) delta += Math.PI * 2;
+  return from + delta * t;
 }
 
 function dampAngle(current: number, target: number, lambda: number, dt: number): number {

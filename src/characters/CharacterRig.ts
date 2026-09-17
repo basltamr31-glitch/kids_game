@@ -1199,6 +1199,46 @@ function buildHead(look: CharacterLook, s: number, material: import('three').Mat
 }
 
 /**
+ * A fringe of overlapping locks across the forehead.
+ *
+ * Every style used to lay a single flat box here. Straight across, with hard
+ * square ends and a perfectly level lower edge, it read as a headband — or,
+ * sitting where it did just above the eyes, as a blindfold. Locks on an arc
+ * with an uneven hem follow the skull and break that line, which is the whole
+ * difference between "child with hair" and "child wearing a bar".
+ *
+ * @param drop  How far the longest locks hang, in head radii.
+ * @param ragged 0 for a blunt cut, 1 for tousled.
+ */
+function addFringe(
+  b: PartBuilder,
+  r: number,
+  s: number,
+  hair: string,
+  locks: number,
+  drop: number,
+  ragged: number,
+): void {
+  const spread = 0.92;
+  for (let i = 0; i < locks; i++) {
+    const t = locks === 1 ? 0.5 : i / (locks - 1);
+    const a = (t - 0.5) * 2 * spread;
+    // Alternating lengths give the hem a scalloped edge rather than a rule.
+    const wobble = (i % 2 === 0 ? 0.0 : -0.42) + Math.sin(i * 2.399) * 0.3;
+    const length = drop * (1 + wobble * ragged);
+    b.sphere(0.062 * s, hair, {
+      pos: [
+        Math.sin(a) * r * 0.94,
+        r * 0.5 - length * r,
+        Math.cos(a) * r * 0.9,
+      ],
+      // Flattened against the skull so the fringe is a sheet, not a row of beads.
+      scale: [1.05, 1 + length * 1.5, 0.62],
+    }, 6);
+  }
+}
+
+/**
  * Hair, on its own joint so it can lag behind the head.
  *
  * Four styles, each chosen for a distinct silhouette rather than for detail:
@@ -1222,7 +1262,7 @@ function buildHair(look: CharacterLook, s: number): Mesh {
         ],
         hair, { scale: [1, 1, 0.98] }, 14,
       );
-      b.box(r * 1.7, 0.07 * s, 0.1 * s, hair, { pos: [0, r * 0.42, r * 0.86] });
+      addFringe(b, r, s, hair, 7, 0.2, 1);
       for (let i = 0; i < 5; i++) {
         b.sphere(0.055 * s, hair, {
           pos: [(-2 + i) * 0.06 * s, r * 0.78 + (i % 2) * 0.03 * s, r * 0.3],
@@ -1244,8 +1284,7 @@ function buildHair(look: CharacterLook, s: number): Mesh {
         ],
         hair, { scale: [1, 1, 1.02] }, 14,
       );
-      // Cut away the face by overlaying a skin-coloured front panel.
-      b.box(r * 1.75, 0.12 * s, 0.1 * s, hair, { pos: [0, r * 0.4, r * 0.88] });
+      addFringe(b, r, s, hair, 9, 0.24, 0.3);
       for (const side of [-1, 1]) {
         b.capsule(0.07 * s, 0.2 * s, hair, {
           pos: [side * r * 0.98, -r * 0.5, 0],
@@ -1265,7 +1304,7 @@ function buildHair(look: CharacterLook, s: number): Mesh {
         ],
         hair, {}, 14,
       );
-      b.box(r * 1.6, 0.08 * s, 0.1 * s, hair, { pos: [0, r * 0.46, r * 0.86] });
+      addFringe(b, r, s, hair, 7, 0.16, 0.7);
       for (const side of [-1, 1]) {
         b.sphere(0.055 * s, 'uiRed', { pos: [side * r * 0.95, r * 0.42, -r * 0.12] }, 6);
         b.capsule(0.075 * s, 0.22 * s, hair, {

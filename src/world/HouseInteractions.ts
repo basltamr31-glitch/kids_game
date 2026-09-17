@@ -1,4 +1,4 @@
-import { Group, Object3D, Vector3 } from 'three';
+import { Group, Object3D, Vector3, type Material } from 'three';
 import {
   Hinge,
   Prop,
@@ -46,6 +46,11 @@ export interface HouseState {
   /** Bedtime: wash, brush, then bed. */
   bedtimeSteps: () => InteractStep[];
   frontDoor: Hinge;
+  /**
+   * Per-frame house behaviour. Currently just the front door, which opens as
+   * the child comes up to it and closes behind them.
+   */
+  update: (dt: number, childPosition: Vector3) => void;
 }
 
 const _v = new Vector3();
@@ -98,6 +103,8 @@ export function buildHouseInteractions(
   registry: InteractableRegistry,
   getCarried: () => Prop | null,
   isSeated: () => boolean,
+  /** The chalet's shell material, so the front door ghosts with the wall. */
+  shellMaterial: Material,
 ): HouseState {
   const group = new Group();
   group.name = 'house-interior-live';
@@ -131,7 +138,9 @@ export function buildHouseInteractions(
   }
 
   /* ---------------- front door ---------------- */
-  const door = buildDoor(registry, { id: 'front-door', width: 1.5, height: 2.4, hand: 1 });
+  const door = buildDoor(registry, {
+    id: 'front-door', width: 1.5, height: 2.4, hand: 1, material: shellMaterial,
+  });
   door.group.position.set(0, 0.72, 5.42);
   group.add(door.group);
   nodes.set('frontDoor', door.pivot);
@@ -670,6 +679,17 @@ export function buildHouseInteractions(
     breakfastSteps,
     bedtimeSteps,
     frontDoor: door.hinge,
+    update: (dt, childPosition) => {
+      // The door has to answer to the child, not to each routine. Routines
+      // walk through it constantly — to breakfast, to bed, out to the animals
+      // — and any of them could forget to open it, at which point the child
+      // walks through a solid door. Hysteresis stops it flapping when they
+      // stand on the threshold.
+      const distance = childPosition.distanceTo(worldOf(door.pivot, _v));
+      if (distance < 2.4) door.hinge.set(true);
+      else if (distance > 3.2) door.hinge.set(false);
+      door.hinge.update(dt);
+    },
   };
 }
 

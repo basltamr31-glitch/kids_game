@@ -197,12 +197,13 @@ export class Game {
     // and the house asks it those questions when deciding what each object
     // offers. That is the whole coupling between them.
     this.runner = new InteractionRunner(ctx, this.player);
+    const chalet = this.world.cutaways[0];
     this.house = buildHouseInteractions(
       this.registry,
       () => this.runner.carriedProp,
       () => this.player.isSeated,
+      chalet.result.shellMaterial,
     );
-    const chalet = this.world.cutaways[0];
     if (chalet) {
       this.house.group.position.copy(chalet.centre);
       this.scene.add(this.house.group);
@@ -781,6 +782,7 @@ export class Game {
 
     /* --- simulation --- */
     this.registry.update(dt);
+    this.house.update(dt, this.player.position);
     this.runner.update(dt);
     this.activities.update(dt);
     this.player.update(dt);
@@ -813,7 +815,7 @@ export class Game {
     // The cutaway follows the camera as well as the child: walking along an
     // outside wall can put the camera indoors, and a screen full of roof
     // underside is both ugly and disorienting.
-    const inside = updateCutaways(
+    const insideBuilding = updateCutaways(
       this.world,
       this.player.position,
       this.cameraRig.camera.position,
@@ -826,7 +828,11 @@ export class Game {
       this.player.position.y + 2.0,
       this.player.position.z,
     );
-    this.weather.setInterior(this.interiorLightTarget, inside ? 1 : 0, dt);
+    this.weather.setInterior(this.interiorLightTarget, insideBuilding ? 1 : 0, dt);
+    // Same signal drives the camera: walls ghosting, the boom coming in, and
+    // the orbit swinging round to the building's open face are one event, so
+    // they can never disagree.
+    this.cameraRig.setIndoor(insideBuilding, dt);
 
     // Stream ambience by proximity.
     const distanceToStream = Math.abs(this.player.position.z - 68);
