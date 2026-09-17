@@ -299,7 +299,7 @@ export function buildWorld(
       terrain,
       {
         count: treeCount,
-        bounds: { minX: 34, maxX: 72, minZ: 20, maxZ: 78 },
+        bounds: { minX: 34, maxX: 72, minZ: -56, maxZ: 78 },
         accept: (x, z) => terrain.heightAt(x, z) < 26 && insideBuildings(x, z),
       },
       quality,
@@ -313,7 +313,7 @@ export function buildWorld(
       terrain,
       {
         count: treeCount,
-        bounds: { minX: -74, maxX: -38, minZ: -20, maxZ: 70 },
+        bounds: { minX: -74, maxX: -38, minZ: -56, maxZ: 70 },
         accept: (x, z) => terrain.heightAt(x, z) < 26,
       },
       quality,
@@ -328,6 +328,22 @@ export function buildWorld(
       {
         count: Math.floor(treeCount * 0.7),
         bounds: { minX: -60, maxX: 60, minZ: 72, maxZ: 92 },
+      },
+      quality,
+      season,
+      'conifer',
+    ),
+  );
+  // The south rim closes the ring. Without it the ridge behind the farmyard is
+  // bare ground with a hard edge against the sky, which is the first thing the
+  // camera sees when it swings round behind the child.
+  seasonal.add(
+    plantTrees(
+      rng.fork('trees-south'),
+      terrain,
+      {
+        count: Math.floor(treeCount * 0.7),
+        bounds: { minX: -64, maxX: 64, minZ: -92, maxZ: -54 },
       },
       quality,
       season,

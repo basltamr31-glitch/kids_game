@@ -7,6 +7,7 @@ import {
   ConeGeometry,
   CylinderGeometry,
   Euler,
+  type EulerOrder,
   LatheGeometry,
   Matrix4,
   Mesh,
@@ -46,6 +47,13 @@ const _pos = new Vector3();
 export interface PartTransform {
   pos?: [number, number, number];
   rot?: [number, number, number];
+  /**
+   * Euler order for `rot`. Defaults to three's 'XYZ', which applies the Y spin
+   * before the X tilt — wrong for anything arranged in a ring, where each part
+   * must tilt outward in its own frame and only then be spun into place. Pass
+   * 'YXZ' for petals, spokes, and other radial arrangements.
+   */
+  rotOrder?: EulerOrder;
   scale?: [number, number, number] | number;
 }
 
@@ -245,6 +253,34 @@ export function geoQuad(w: number, h: number): BufferGeometry {
   });
 }
 
+/**
+ * A petal: narrow at the root, widest around two thirds up, rounded at the tip.
+ *
+ * Flowers built from plain rectangles read as slabs however they are arranged,
+ * because the silhouette is a hard-edged box. Four triangles buy a shape the
+ * eye accepts as a petal at any distance the player will ever see it from.
+ * Origin sits at the bottom edge, matching geoQuad, so it grows upward.
+ */
+export function geoPetal(w: number, h: number): BufferGeometry {
+  return cached(`p${w},${h}`, () => {
+    const hw = w / 2;
+    const geo = new BufferGeometry();
+    // Six points up one side and down the other, fanned from the root.
+    const positions = new Float32Array([
+      0, 0, 0,
+      -hw * 0.45, h * 0.28, 0,
+      -hw, h * 0.66, 0,
+      0, h, 0,
+      hw, h * 0.66, 0,
+      hw * 0.45, h * 0.28, 0,
+    ]);
+    geo.setAttribute('position', new BufferAttribute(positions, 3));
+    geo.setIndex([0, 1, 5, 1, 2, 5, 2, 4, 5, 2, 3, 4]);
+    geo.computeVertexNormals();
+    return geo;
+  });
+}
+
 export function geoCircle(r: number, seg = 16): BufferGeometry {
   return cached(`o${r},${seg}`, () => new CircleGeometry(r, seg));
 }
@@ -318,7 +354,7 @@ export function geoPrism(width: number, height: number, length: number): BufferG
 function applyTransform(geo: BufferGeometry, t: PartTransform): void {
   const s = t.scale ?? 1;
   _pos.set(...(t.pos ?? [0, 0, 0]));
-  _euler.set(...(t.rot ?? [0, 0, 0]));
+  _euler.set(...(t.rot ?? [0, 0, 0]), t.rotOrder ?? 'XYZ');
   _quat.setFromEuler(_euler);
   if (typeof s === 'number') _scale.set(s, s, s);
   else _scale.set(...s);

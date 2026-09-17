@@ -19,6 +19,8 @@ export const PALETTE = {
   skyDusk: '#F2A18C',
   skyNight: '#1F2A52',
   skyOvercast: '#B6C3CC',
+  /** Pale blue-grey the valley walls fade into with height and distance. */
+  valleyHaze: '#A8C4D8',
 
   horizonDay: '#DCEEF7',
   horizonDusk: '#FFD9AE',

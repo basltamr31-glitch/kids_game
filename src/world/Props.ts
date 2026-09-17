@@ -12,7 +12,7 @@ import {
   StaticDrawUsage,
   LOD,
 } from 'three';
-import { PartBuilder, geoQuad, mergeGeometries, paint, setNormalsUp } from '../art/MeshKit';
+import { PartBuilder, geoPetal, geoQuad, mergeGeometries, paint, setNormalsUp } from '../art/MeshKit';
 import { M } from '../art/Materials';
 import { color } from '../art/Palette';
 import { clamp01, type Rng } from '../core/Rng';
@@ -217,9 +217,12 @@ function buildTuft(blades: number, curve: boolean, rng: Rng): BufferGeometry {
 
   for (let i = 0; i < blades; i++) {
     const a = (i / blades) * Math.PI * 2 + rng.range(-0.25, 0.25);
-    const lean = rng.range(0.1, 0.34);
-    const h = rng.range(0.3, 0.52);
-    const w = rng.range(0.055, 0.085);
+    const lean = rng.range(0.14, 0.42);
+    // Blade height is measured against the child, who is about 1.1m. Anything
+    // over ~0.3 stops reading as a meadow and starts reading as a field of
+    // sticks the child is wading through.
+    const h = rng.range(0.15, 0.27);
+    const w = rng.range(0.05, 0.075);
 
     if (!curve) {
       // Far LOD: one straight quad per blade. 2 triangles.
@@ -254,8 +257,10 @@ function buildTuft(blades: number, curve: boolean, rng: Rng): BufferGeometry {
   const geometry = b.build({ ao: false });
   setNormalsUp(geometry);
 
-  // Root-to-tip gradient, then white so the instance colour is the only tint.
-  applyHeightShade(geometry, 0.62, 1.12);
+  // Root-to-tip gradient. The tip must not exceed 1: values above it blow the
+  // blade out past its own instance colour, which is what made the meadow look
+  // like bleached straw rather than grass.
+  applyHeightShade(geometry, 0.72, 1.0);
   return geometry;
 }
 
@@ -354,13 +359,16 @@ export function buildGrassRings(
       _quat.setFromEuler(_euler);
       // Far tufts are scaled up so a sparse ring still covers the ground.
       const base = ring.curve ? 1 : 1.45;
-      const s = base * rng.range(0.8, 1.35);
-      _scale.set(s, s * rng.range(0.85, 1.3), s);
+      const s = base * rng.range(0.85, 1.2);
+      _scale.set(s, s * rng.range(0.9, 1.15), s);
       _matrix.compose(_pos, _quat, _scale);
       mesh.setMatrixAt(placed, _matrix);
 
-      _color.copy(light).lerp(deep, rng.next() * 0.6);
-      _color.lerp(dry, rng.next() * 0.3);
+      // Weight toward the deeper greens, and let only a few tufts pick up any
+      // dry straw at all, so the field reads as one meadow rather than as
+      // scattered pale stalks.
+      _color.copy(light).lerp(deep, 0.25 + rng.next() * 0.65);
+      if (rng.next() < 0.22) _color.lerp(dry, rng.next() * 0.35);
       if (season === 'winter') _color.lerp(snow, 0.55 + rng.next() * 0.3);
       mesh.setColorAt(placed, _color);
       placed++;
@@ -377,41 +385,65 @@ export function buildGrassRings(
 }
 
 /** Wildflowers: a proper stem, leaves and a ring of petals around a centre. */
+/**
+ * Meadow flowers.
+ *
+ * Two instanced meshes over one set of transforms, not one. An InstancedMesh
+ * multiplies its geometry's vertex colour by the per-instance colour, so a
+ * single mesh can only ever be one colour per flower — which turned the stem,
+ * the leaves and the golden centre pink along with the petals. Splitting the
+ * tinted petals from the fixed green-and-gold plant costs one extra draw call
+ * and is the only way to get a pink flower with a green stem.
+ */
 export function buildScatterProps(
   rng: Rng,
   terrain: Terrain,
   spec: ScatterSpec,
   season: Season,
-): InstancedMesh {
-  const b = new PartBuilder();
+): Group {
+  const group = new Group();
+  group.name = 'flowers';
 
-  b.cylinder(0.015, 0.022, 0.34, 'grassDeep', { pos: [0, 0.17, 0] }, 4);
-  // Two leaves low on the stem.
+  // --- the plant: stem, leaves and centre, in their authored colours ---
+  const plant = new PartBuilder();
+  plant.cylinder(0.013, 0.019, 0.26, 'grassDeep', { pos: [0, 0.13, 0] }, 4);
   for (const side of [-1, 1]) {
-    b.add(geoQuad(0.09, 0.05), 'grassDeep', {
-      pos: [side * 0.05, 0.09, 0],
+    plant.add(geoQuad(0.075, 0.045), 'grassDeep', {
+      pos: [side * 0.04, 0.07, 0],
       rot: [1.35, 0, side * 0.5],
     });
   }
-  // Petals, angled up slightly so the flower faces the sky.
-  const petals = 6;
+  plant.sphere(0.03, 'sunGold', { pos: [0, 0.275, 0] }, 6);
+  const plantGeometry = plant.build({ ao: false });
+  setNormalsUp(plantGeometry);
+
+  // --- the petals: white, so the per-instance colour is the flower colour ---
+  const head = new PartBuilder();
+  const petals = 8;
   for (let i = 0; i < petals; i++) {
     const a = (i / petals) * Math.PI * 2;
-    b.add(geoQuad(0.06, 0.11), 'meadowFlowerA', {
-      pos: [Math.cos(a) * 0.065, 0.34, Math.sin(a) * 0.065],
-      rot: [1.2, -a, 0],
+    // An open cup. Laid flat, a ring of petals reads from a child's eye height
+    // as a horizontal bar on a stick rather than as a flower; stood upright it
+    // reads as a tube. Just past halfway is what looks like a flower.
+    head.add(geoPetal(0.042, 0.075), 'meadowFlowerA', {
+      pos: [Math.cos(a) * 0.026, 0.25, Math.sin(a) * 0.026],
+      rot: [0.78, -a, 0],
+      rotOrder: 'YXZ',
     });
   }
-  b.sphere(0.04, 'sunGold', { pos: [0, 0.37, 0] }, 6);
+  const headGeometry = head.build({ ao: false });
+  setNormalsUp(headGeometry);
+  paint(headGeometry, '#FFFFFF');
 
-  const geometry = b.build({ ao: false });
-  setNormalsUp(geometry);
-  paint(geometry, '#FFFFFF');
-
-  const mesh = new InstancedMesh(geometry, M.foliage(0.55), spec.count);
-  mesh.name = 'flowers';
-  mesh.castShadow = false;
-  mesh.receiveShadow = false;
+  const stems = new InstancedMesh(plantGeometry, M.foliage(0.55), spec.count);
+  stems.name = 'flower-stems';
+  const heads = new InstancedMesh(headGeometry, M.foliage(0.55), spec.count);
+  heads.name = 'flower-heads';
+  for (const mesh of [stems, heads]) {
+    mesh.castShadow = false;
+    mesh.receiveShadow = false;
+    mesh.instanceMatrix.setUsage(StaticDrawUsage);
+  }
 
   const variants = [
     color('meadowFlowerA'),
@@ -436,17 +468,24 @@ export function buildScatterProps(
     _pos.set(x, terrain.heightAt(x, z), z);
     _euler.set(rng.range(-0.1, 0.1), rng.range(0, Math.PI * 2), rng.range(-0.1, 0.1));
     _quat.setFromEuler(_euler);
-    _scale.setScalar(rng.range(0.75, 1.45));
+    // A meadow flower beside a four-year-old reaches the ankle or the knee,
+    // not the waist.
+    _scale.setScalar(rng.range(0.75, 1.25));
     _matrix.compose(_pos, _quat, _scale);
-    mesh.setMatrixAt(placed, _matrix);
-    mesh.setColorAt(placed, rng.pick(variants));
+    stems.setMatrixAt(placed, _matrix);
+    heads.setMatrixAt(placed, _matrix);
+    heads.setColorAt(placed, rng.pick(variants));
     placed++;
   }
-  mesh.count = placed;
-  mesh.instanceMatrix.needsUpdate = true;
-  if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
-  mesh.computeBoundingSphere();
-  return mesh;
+
+  for (const mesh of [stems, heads]) {
+    mesh.count = placed;
+    mesh.instanceMatrix.needsUpdate = true;
+    if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
+    mesh.computeBoundingSphere();
+    group.add(mesh);
+  }
+  return group;
 }
 
 /** Ground clutter: pebbles, twigs and clover. Sells "this ground is real". */
