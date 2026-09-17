@@ -1,4 +1,4 @@
-import { Group, Mesh, type Material } from 'three';
+import { Group, Mesh, Vector3, type Material } from 'three';
 import { PartBuilder } from '../art/MeshKit';
 import { surface, M } from '../art/Materials';
 import type { Rng } from '../core/Rng';
@@ -24,6 +24,8 @@ export interface BuildingResult {
   /** Always-present interior. Hidden behind the shell from outside. */
   interior?: Mesh;
   shellMaterial: Material;
+  /** Local-space point smoke leaves from, for buildings with a chimney. */
+  chimneyTop?: Vector3;
 }
 
 /* ------------------------------------------------------------------ */
@@ -179,7 +181,7 @@ export function buildChalet(rng: Rng): BuildingResult {
   const interior = buildChaletInterior(W, D, H1, upperY);
   group.add(interior);
 
-  return { group, shell, interior, shellMaterial };
+  return { group, shell, interior, shellMaterial, chimneyTop: new Vector3(-3.2, roofY + 3.4, -1.2) };
 }
 
 function addWindow(b: PartBuilder, x: number, y: number, z: number, rotY: number): void {
@@ -440,7 +442,7 @@ export function buildBarn(rng: Rng): BuildingResult {
   interior.receiveShadow = true;
   group.add(interior);
 
-  return { group, shell, interior, shellMaterial };
+  return { group, shell, interior, shellMaterial, chimneyTop: new Vector3(-3.2, roofY + 3.4, -1.2) };
 }
 
 /* ------------------------------------------------------------------ */

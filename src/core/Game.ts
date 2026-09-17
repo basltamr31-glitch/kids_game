@@ -812,6 +812,10 @@ export class Game {
     const gust = save.weather === 'rain' || save.weather === 'snow' ? 1.8 : 1.0;
     updateSharedUniforms(this.windTime, gust);
 
+    // Butterflies, birds and chimney smoke. The same gust that bends the grass
+    // leans the smoke plume downwind.
+    this.world.ambient.update(dt, gust * 0.6);
+
     // The cutaway follows the camera as well as the child: walking along an
     // outside wall can put the camera indoors, and a screen full of roof
     // underside is both ugly and disorienting.

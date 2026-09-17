@@ -302,10 +302,17 @@ export class WeatherSystem {
     this.interior.intensity = (0.5 + night * 1.5) * (0.25 + this.interiorAmount * 0.95) * 6;
   }
 
-  /** Extra ambient while indoors, so shaded corners stay readable. */
+  /**
+   * Extra ambient while indoors, so shaded corners stay readable.
+   *
+   * The doll's-house shot frames the whole ground floor at once, most of which
+   * is well away from the single lamp that follows the child, so the room has
+   * to be carried by ambient rather than by that lamp. The lift only applies
+   * while inside, so the outdoor look is untouched.
+   */
   private applyInteriorAmbient(): void {
-    this.ambient.intensity += this.interiorAmount * 0.22;
-    this.hemisphere.intensity += this.interiorAmount * 0.14;
+    this.ambient.intensity += this.interiorAmount * 0.55;
+    this.hemisphere.intensity += this.interiorAmount * 0.4;
   }
 
   private buildParticles(): void {

@@ -3,6 +3,7 @@ import { Terrain } from './Terrain';
 import { Sky } from './Sky';
 import { buildMountains, Water, buildStreamBank } from './Landscape';
 import { buildChalet, buildBarn, buildCoop, type BuildingResult } from './Buildings';
+import { AmbientLife } from './AmbientLife';
 import {
   buildFence,
   buildWell,
@@ -67,6 +68,8 @@ export interface BuiltWorld {
   }[];
   /** Everything that should be re-scattered when the season changes. */
   seasonal: Group;
+  /** Butterflies, birds and chimney smoke. Decorative, updated every frame. */
+  ambient: AmbientLife;
 }
 
 /**
@@ -423,7 +426,20 @@ export function buildWorld(
   // Barn's hay is also reachable inside the barn, which is where a child looks.
   add('barnhay', LAYOUT.barn.x - 4.5, LAYOUT.barn.z - 2.5, 'barn', 2.0, true);
 
-  return { root, terrain, sky, water, anchors, cutaways, seasonal };
+  // Ambient life last, so it can read the finished buildings' chimneys.
+  const chimneys: Vector3[] = [];
+  for (const cutaway of cutaways) {
+    const local = cutaway.result.chimneyTop;
+    if (local) chimneys.push(cutaway.result.group.localToWorld(local.clone()));
+  }
+  const ambient = new AmbientLife(rng.fork('ambient'), terrain, quality, {
+    chimneys,
+    meadowCentre: new Vector3(0, 0, 6),
+    meadowRadius: 24,
+  });
+  root.add(ambient.group);
+
+  return { root, terrain, sky, water, anchors, cutaways, seasonal, ambient };
 }
 
 function near(x: number, z: number, point: Vector3, radius: number): boolean {
