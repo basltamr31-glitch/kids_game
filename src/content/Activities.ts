@@ -71,14 +71,10 @@ export const ACTIVITIES: ActivityDefinition[] = [
     icon: '🐄',
     verb: 'feed',
     anchor: 'bella',
-    steps: [
-      { kind: 'takeItem', item: 'hay', target: 'haybale' },
-      { kind: 'walkTo', target: 'bella' },
-      { kind: 'animate', clip: 'offer', duration: 1.5 },
-      { kind: 'animalReact', target: 'bella', emote: '💛', duration: 1.6 },
-      { kind: 'giveItem', item: 'hay', count: 1 },
-    ],
-    rewards: { hearts: 2 },
+    // Performed physically by the farm routine of the same name; that
+    // routine also pays out, so nothing is granted twice here.
+    steps: [{ kind: 'routine', flag: 'feedcow' }],
+    rewards: { hearts: 0 },
     phases: ['morning', 'midday', 'afternoon'],
     weight: 10,
     oncePerDay: true,
@@ -90,15 +86,10 @@ export const ACTIVITIES: ActivityDefinition[] = [
     icon: '🐑',
     verb: 'feed',
     anchor: 'milo',
-    steps: [
-      { kind: 'takeItem', item: 'hay', target: 'haybale' },
-      { kind: 'walkTo', target: 'milo' },
-      { kind: 'animate', clip: 'offer', duration: 1.4 },
-      { kind: 'animalReact', target: 'milo', emote: '💛', duration: 1.4 },
-      { kind: 'animalReact', target: 'pip', emote: '💛', duration: 1.2 },
-      { kind: 'giveItem', item: 'hay', count: 1 },
-    ],
-    rewards: { hearts: 2 },
+    // Performed physically by the farm routine of the same name; that
+    // routine also pays out, so nothing is granted twice here.
+    steps: [{ kind: 'routine', flag: 'feedsheep' }],
+    rewards: { hearts: 0 },
     phases: ['morning', 'midday', 'afternoon'],
     weight: 10,
     oncePerDay: true,
@@ -110,16 +101,10 @@ export const ACTIVITIES: ActivityDefinition[] = [
     icon: '🐔',
     verb: 'feed',
     anchor: 'luna',
-    steps: [
-      { kind: 'takeItem', item: 'grain', target: 'grainsack' },
-      { kind: 'walkTo', target: 'luna' },
-      { kind: 'animate', clip: 'scatter', duration: 1.6 },
-      { kind: 'animalReact', target: 'luna', emote: '💛', duration: 1.2 },
-      { kind: 'animalReact', target: 'speckle', emote: '💛', duration: 1.2 },
-      { kind: 'animalReact', target: 'henny', emote: '💛', duration: 1.2 },
-      { kind: 'giveItem', item: 'grain', count: 1 },
-    ],
-    rewards: { hearts: 2 },
+    // Performed physically by the farm routine of the same name; that
+    // routine also pays out, so nothing is granted twice here.
+    steps: [{ kind: 'routine', flag: 'feedchickens' }],
+    rewards: { hearts: 0 },
     phases: ['morning', 'midday', 'afternoon'],
     weight: 10,
     oncePerDay: true,
@@ -131,14 +116,10 @@ export const ACTIVITIES: ActivityDefinition[] = [
     icon: '🪣',
     verb: 'water',
     anchor: 'trough',
-    steps: [
-      { kind: 'takeItem', item: 'bucket', target: 'well' },
-      { kind: 'walkTo', target: 'trough' },
-      { kind: 'animate', clip: 'pour', duration: 1.8 },
-      { kind: 'giveItem', item: 'bucket', count: 1 },
-      { kind: 'animalReact', target: 'bella', emote: '💧', duration: 1.4 },
-    ],
-    rewards: { hearts: 2 },
+    // Performed physically by the farm routine of the same name; that
+    // routine also pays out, so nothing is granted twice here.
+    steps: [{ kind: 'routine', flag: 'watercow' }],
+    rewards: { hearts: 0 },
     phases: ['morning', 'midday', 'afternoon'],
     weight: 8,
     oncePerDay: true,
@@ -150,12 +131,10 @@ export const ACTIVITIES: ActivityDefinition[] = [
     icon: '🥚',
     verb: 'collect',
     anchor: 'nestbox',
-    steps: [
-      { kind: 'walkTo', target: 'nestbox' },
-      { kind: 'animate', clip: 'crouchPick', duration: 1.8 },
-      { kind: 'emote', target: 'child', emote: '🥚', duration: 1.2 },
-    ],
-    rewards: { hearts: 2, items: [{ id: 'egg', count: 3 }] },
+    // Performed physically by the farm routine of the same name; that
+    // routine also pays out, so nothing is granted twice here.
+    steps: [{ kind: 'routine', flag: 'collecteggs' }],
+    rewards: { hearts: 0 },
     phases: ['morning', 'midday'],
     requiresActivities: ['feedchickens'],
     weight: 9,
@@ -168,14 +147,10 @@ export const ACTIVITIES: ActivityDefinition[] = [
     icon: '🥛',
     verb: 'milk',
     anchor: 'bella',
-    steps: [
-      { kind: 'takeItem', item: 'bucket', target: 'well' },
-      { kind: 'walkTo', target: 'bella' },
-      { kind: 'animate', clip: 'milk', duration: 2.6 },
-      { kind: 'animalReact', target: 'bella', emote: '💛', duration: 1.4 },
-      { kind: 'giveItem', item: 'bucket', count: 1 },
-    ],
-    rewards: { hearts: 2, items: [{ id: 'milk', count: 1 }] },
+    // Performed physically by the farm routine of the same name; that
+    // routine also pays out, so nothing is granted twice here.
+    steps: [{ kind: 'routine', flag: 'milkcow' }],
+    rewards: { hearts: 0 },
     phases: ['morning', 'midday'],
     requiresActivities: ['feedcow'],
     weight: 9,

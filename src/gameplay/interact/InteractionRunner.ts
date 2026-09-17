@@ -222,6 +222,29 @@ export class InteractionRunner {
         break;
       }
 
+      case 'dropProp': {
+        const prop = this.carried;
+        if (!prop) break;
+        player.playClip('place');
+        const parent = step.parent;
+        // The tween works in the target parent's space, so convert first.
+        const local = parent.worldToLocal(step.point.clone());
+        this.startTween(
+          prop,
+          parent,
+          local,
+          new Quaternion(),
+          step.duration ?? 0.85,
+          0.12,
+          () => {
+            this.carried = null;
+            this.ctx.audio.play('drop');
+            player.setCarrying(false);
+          },
+        );
+        break;
+      }
+
       case 'spawnProp': {
         const prop = makeProp(step.kind2 as PropKind);
         step.socket.put(prop);

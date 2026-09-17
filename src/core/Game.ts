@@ -26,10 +26,17 @@ import { WeatherSystem } from '../gameplay/WeatherSystem';
 import { InteractableRegistry } from '../gameplay/interact/Interactable';
 import { InteractionRunner } from '../gameplay/interact/InteractionRunner';
 import { buildHouseInteractions, type HouseState } from '../world/HouseInteractions';
+import { buildFarmInteractions, type FarmState } from '../world/FarmInteractions';
 import { AnimalAgent } from '../animals/AnimalAgent';
 import { FamilyAgent } from '../characters/FamilyAgent';
 
-import { animalsFor, ANIMALS_BY_ID, DISCOVERIES_BY_ID, AREAS_BY_ID } from '../content';
+import {
+  animalsFor,
+  ANIMALS_BY_ID,
+  DISCOVERIES_BY_ID,
+  AREAS_BY_ID,
+  ITEMS_BY_ID,
+} from '../content';
 import type { AnimalSaveState } from '../save/SaveSchema';
 
 import { UIRoot } from '../ui/UIRoot';
@@ -71,6 +78,7 @@ export class Game {
   private registry = new InteractableRegistry();
   private runner!: InteractionRunner;
   private house!: HouseState;
+  private farm!: FarmState;
   private ui!: UIRoot;
   private hud!: Hud;
   private layout: ResponsiveLayout;
@@ -200,6 +208,18 @@ export class Game {
       this.scene.add(this.house.group);
     }
 
+    // The farm's interactables live in world space already, so its group
+    // stays at the origin.
+    this.farm = buildFarmInteractions(
+      this.registry,
+      this.animals,
+      this.world.terrain,
+      () => this.runner.carriedProp,
+      () => this.player.position,
+      (item, count) => this.grantItem(item, count),
+    );
+    this.scene.add(this.farm.group);
+
     /* --- systems --- */
     this.director = new DayDirector(ctx);
     this.activities = new ActivitySystem(ctx, {
@@ -209,11 +229,7 @@ export class Game {
       world: this.world,
       camera: this.cameraRig,
     });
-    // Physical routines the scheduled activities hand off to.
-    this.activities.attachRunner(this.runner, {
-      breakfast: () => this.house.breakfastSteps(),
-      bedtime: () => this.house.bedtimeSteps(),
-    });
+    this.attachRoutines();
 
     this.interaction = new InteractionSystem(ctx, {
       player: this.player,
@@ -334,6 +350,29 @@ export class Game {
     });
   }
 
+  /**
+   * Hands the scheduled activities the physical routines they defer to.
+   *
+   * Called once at start-up and again whenever the runner is rebuilt, because
+   * a routine closes over `this.runner` only through the systems it is given.
+   */
+  private attachRoutines(): void {
+    this.activities.attachRunner(this.runner, {
+      breakfast: () => this.house.breakfastSteps(),
+      bedtime: () => this.house.bedtimeSteps(),
+      ...this.farm.routines,
+    });
+  }
+
+  /** Adds a produced item to the inventory, respecting its stack limit. */
+  private grantItem(item: string, count: number): void {
+    const max = ITEMS_BY_ID.get(item)?.max ?? 99;
+    this.ctx.save.update((data) => {
+      data.inventory[item] = Math.min(max, (data.inventory[item] ?? 0) + count);
+    });
+    this.ctx.bus.emit('inventory:changed');
+  }
+
   /** Pushes phase/weather state out to everything that cares. */
   private syncPhaseDependents(): void {
     const ctx = this.ctx;
@@ -346,6 +385,7 @@ export class Game {
     this.weather.setSeason(ctx.save.save.season);
 
     for (const parent of this.parents.values()) parent.setPhase(phase, weather);
+    for (const animal of this.animals.values()) animal.setPhase(phase);
   }
 
   /* ------------------------------------------------------------------ */
@@ -530,6 +570,7 @@ export class Game {
       registry: this.registry,
       runner: this.runner,
     });
+    this.attachRoutines();
   }
 
   private openNatureBook(): void {

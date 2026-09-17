@@ -18,7 +18,28 @@ import type { Terrain } from '../world/Terrain';
  * target point on a walkable patch and a timer.
  */
 
-type State = 'idle' | 'wander' | 'graze' | 'rest' | 'approach' | 'watch' | 'react';
+type State =
+  | 'idle' | 'wander' | 'graze' | 'rest' | 'approach' | 'watch' | 'react'
+  /** Walking to a specific spot for a routine or a dropped pile of food. */
+  | 'travel'
+  /** Head down at a dropped pile of food. */
+  | 'feeding'
+  | 'drinking';
+
+/**
+ * Where an animal wants to be during each part of the day.
+ *
+ * This is the difference between livestock and scenery. A cow that drifts to
+ * the feeding corner in the morning, spends the day out in the pasture, comes
+ * to the trough in the afternoon and walks back toward the barn in the evening
+ * reads as an animal with a life, and it costs one table and a target point.
+ */
+interface RoutineStop {
+  /** Offset from the animal's home area centre, in metres. */
+  offset: [number, number];
+  /** How tightly it holds that spot. 0 wanders freely, 1 stays put. */
+  focus: number;
+}
 
 interface TemperamentTuning {
   /** Relative weights for picking the next state. */
@@ -64,6 +85,31 @@ const TUNING: Record<string, TemperamentTuning> = {
   },
 };
 
+const ROUTINE: Record<string, Record<string, RoutineStop>> = {
+  cow: {
+    morning:   { offset: [-9, -8], focus: 0.7 },   // feeding corner
+    midday:    { offset: [4, 6], focus: 0.15 },    // out in the pasture
+    afternoon: { offset: [-2, -6], focus: 0.6 },   // near the trough
+    evening:   { offset: [-10, -10], focus: 0.75 },// drifting back to the barn
+    night:     { offset: [-11, -11], focus: 0.9 },
+  },
+  sheep: {
+    morning:   { offset: [-6, -4], focus: 0.5 },
+    midday:    { offset: [7, 8], focus: 0.1 },
+    afternoon: { offset: [2, 2], focus: 0.2 },
+    evening:   { offset: [-8, -8], focus: 0.7 },
+    night:     { offset: [-9, -9], focus: 0.9 },
+  },
+  chicken: {
+    // Chickens stay near the coop all day and simply bustle about.
+    morning:   { offset: [2, -2], focus: 0.3 },
+    midday:    { offset: [-2, 2], focus: 0.2 },
+    afternoon: { offset: [1, 3], focus: 0.2 },
+    evening:   { offset: [3, -1], focus: 0.6 },
+    night:     { offset: [3, -1], focus: 0.95 },
+  },
+};
+
 export class AnimalAgent {
   readonly rig: AnimalRig;
   readonly definition: AnimalDefinition;
@@ -82,6 +128,16 @@ export class AnimalAgent {
   private reactTimer = 0;
   private homeCentre = new Vector3();
   private homeRadius = 8;
+
+  /** Current routine anchor, recomputed when the day phase changes. */
+  private routineCentre = new Vector3();
+  private routineFocus = 0.2;
+  private phase = '';
+
+  /** Set while the animal is walking to, and then eating, a dropped pile. */
+  private foodPoint: Vector3 | null = null;
+  private onFoodEaten: (() => void) | null = null;
+  private feedTimer = 0;
 
   constructor(
     definition: AnimalDefinition,
@@ -120,11 +176,48 @@ export class AnimalAgent {
     this.object.position.set(x, terrain.heightAt(x, z), z);
     this.object.rotation.y = rng.range(0, Math.PI * 2);
     this.target.copy(this.object.position);
+    this.routineCentre.copy(this.homeCentre);
     this.pickNextBehaviour(new Vector3(0, 0, 1e6));
   }
 
   get id(): string {
     return this.definition.id;
+  }
+
+  /**
+   * Moves the animal onto its routine anchor for a new part of the day.
+   * Called by the game whenever the phase changes.
+   */
+  setPhase(phase: string): void {
+    if (phase === this.phase) return;
+    this.phase = phase;
+    const table = ROUTINE[this.definition.kind] ?? ROUTINE.sheep;
+    const stop = table[phase] ?? table.midday;
+    this.routineCentre.set(
+      this.homeCentre.x + stop.offset[0],
+      0,
+      this.homeCentre.z + stop.offset[1],
+    );
+    this.routineFocus = stop.focus;
+    // Break whatever it was doing so the change is visible rather than
+    // waiting out a long graze.
+    if (this.behaviour === 'graze' || this.behaviour === 'idle') this.timer = 0;
+  }
+
+  /**
+   * Sends the animal to a pile of food the child has put down, to eat it.
+   *
+   * This is what makes feeding feel like feeding: the child sets the hay down
+   * and the animal walks over and puts its head in it, rather than a number
+   * changing somewhere.
+   */
+  beginEating(point: Vector3, onDone: () => void): void {
+    this.foodPoint = point.clone();
+    this.onFoodEaten = onDone;
+    this.behaviour = 'travel';
+    this.timer = 14;
+    this.setTargetUnclamped(point.x, point.z);
+    this.rig.play('walk');
   }
 
   get position(): Vector3 {
@@ -176,6 +269,41 @@ export class AnimalAgent {
     if (this.timer <= 0) this.pickNextBehaviour(childPosition);
 
     switch (this.behaviour) {
+      case 'travel': {
+        if (!this.foodPoint) {
+          this.pickNextBehaviour(childPosition);
+          break;
+        }
+        const arrived = !this.moveToward(this.target, dt);
+        if (arrived) {
+          this.behaviour = 'feeding';
+          this.feedTimer = this.rng.range(5, 8);
+          this.rig.play('eat');
+          this.faceToward(this.foodPoint, dt);
+        }
+        break;
+      }
+
+      case 'feeding': {
+        this.velocity = damp(this.velocity, 0, 8, dt);
+        this.feedTimer -= dt;
+        if (this.feedTimer <= 0) {
+          this.onFoodEaten?.();
+          this.onFoodEaten = null;
+          this.foodPoint = null;
+          this.state.fed = 1;
+          this.behaviour = 'react';
+          this.reactTimer = 1.6;
+          this.rig.play('happy');
+        }
+        break;
+      }
+
+      case 'drinking': {
+        this.velocity = damp(this.velocity, 0, 8, dt);
+        break;
+      }
+
       case 'wander':
       case 'approach': {
         const moved = this.moveToward(this.target, dt);
@@ -268,11 +396,15 @@ export class AnimalAgent {
     switch (choice) {
       case 'wander': {
         this.timer = this.rng.range(3, 7) * t.pace;
+        // Wander around the ROUTINE anchor rather than the area centre, and
+        // the tighter the focus the smaller the circle. That is what makes a
+        // herd drift toward the barn as evening comes on.
         const angle = this.rng.range(0, Math.PI * 2);
-        const radius = this.rng.range(2, this.homeRadius);
+        const spread = this.homeRadius * (1 - this.routineFocus * 0.8);
+        const radius = this.rng.range(1, Math.max(1.5, spread));
         this.setTarget(
-          this.homeCentre.x + Math.cos(angle) * radius,
-          this.homeCentre.z + Math.sin(angle) * radius,
+          this.routineCentre.x + Math.cos(angle) * radius,
+          this.routineCentre.z + Math.sin(angle) * radius,
         );
         this.rig.play('walk');
         break;
@@ -294,6 +426,11 @@ export class AnimalAgent {
         this.rig.play('idle');
         break;
     }
+  }
+
+  /** Sets a target without clamping to the home area, for dropped food. */
+  private setTargetUnclamped(x: number, z: number): void {
+    this.target.set(x, this.terrain.heightAt(x, z), z);
   }
 
   private setTarget(x: number, z: number): void {

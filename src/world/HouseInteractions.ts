@@ -30,6 +30,9 @@ import {
  * That chain is what turns "have breakfast" from a button into a morning.
  */
 
+/** Names of the physical routines this module supplies. See FARM_ROUTINE_IDS. */
+export const HOUSE_ROUTINE_IDS = ['breakfast', 'bedtime'] as const;
+
 export interface HouseState {
   registry: InteractableRegistry;
   /** What the child is holding right now, if anything. */

@@ -13,6 +13,9 @@ import {
   animalsFor,
 } from '../src/content';
 import { LOCALES, resolveLocale } from '../src/localization/Localization';
+import { readFileSync } from 'node:fs';
+import { HOUSE_ROUTINE_IDS } from '../src/world/HouseInteractions';
+import { FARM_ROUTINE_IDS } from '../src/world/FarmInteractions';
 
 /**
  * Content and localization are the two places a typo becomes a soft lock or an
@@ -207,5 +210,36 @@ describe('localization', () => {
     // Unsupported languages fall back to English rather than breaking.
     expect(resolveLocale('ja-JP')).toBe('en');
     expect(resolveLocale('')).toBe('en');
+  });
+});
+
+/**
+ * These two guard the seams between hand-written content and hand-written
+ * code, which are the places a rename silently breaks the game at runtime
+ * instead of at build time.
+ */
+describe('content/code seams', () => {
+  it('resolves every routine step to a registered routine', () => {
+    const registered = new Set<string>([...HOUSE_ROUTINE_IDS, ...FARM_ROUTINE_IDS]);
+    for (const activity of ACTIVITIES) {
+      for (const step of activity.steps) {
+        if (step.kind !== 'routine') continue;
+        expect(step.flag, `${activity.id}: routine step needs a flag`).toBeTypeOf('string');
+        expect(registered.has(step.flag!), `${activity.id} -> routine "${step.flag}"`).toBe(true);
+      }
+    }
+  });
+
+  it('translates every interaction label the world code asks for', () => {
+    const english = LOCALES.find((l) => l.code === 'en')!;
+    const sources = [
+      readFileSync(new URL('../src/world/HouseInteractions.ts', import.meta.url), 'utf8'),
+      readFileSync(new URL('../src/world/FarmInteractions.ts', import.meta.url), 'utf8'),
+    ].join('\n');
+    const keys = new Set(sources.match(/'interact\.[A-Za-z.]+'/g)?.map((k) => k.slice(1, -1)) ?? []);
+    expect(keys.size).toBeGreaterThan(10);
+    for (const key of keys) {
+      expect(english.table[key], `missing translation: ${key}`).toBeTypeOf('string');
+    }
   });
 });

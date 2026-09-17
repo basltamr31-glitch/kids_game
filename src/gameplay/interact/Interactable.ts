@@ -172,6 +172,15 @@ export type InteractStep =
   | { kind: 'takeProp'; prop: Prop; duration?: number }
   /** Move the carried prop into a socket. */
   | { kind: 'placeProp'; socket: Socket; duration?: number }
+  /**
+   * Puts the carried prop down on the ground at a world point.
+   *
+   * Sockets model defined slots in furniture. A pile of hay dropped in front
+   * of a cow is not a slot, and forcing one would mean inventing an invisible
+   * socket per animal per feed, so setting a prop down loose in the world is
+   * its own primitive.
+   */
+  | { kind: 'dropProp'; point: Vector3; parent: Object3D; duration?: number }
   /** Create a prop and put it straight into a socket (milk into a bucket). */
   | { kind: 'spawnProp'; kind2: string; socket: Socket }
   /** Remove a prop from the world (bread eaten). */
