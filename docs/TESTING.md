@@ -28,7 +28,7 @@ farm to an update is worse than any crash.
 - locale follows the device until the player picks one explicitly
 - **resetting progress does not destroy a purchase**
 
-### `tests/content.test.ts` — 17 tests
+### `tests/content.test.ts` — 19 tests
 
 The place where a typo becomes a soft lock rather than a compile error.
 
@@ -52,6 +52,11 @@ The place where a typo becomes a soft lock rather than a compile error.
 - every `{placeholder}` survives translation in every language
 - every key the content tables reference has a translation
 - regional tags resolve (`de-CH` → `de`, `ja-JP` → `en`)
+- **every `routine` step names a routine the world actually registers** — a
+  rename here fails silently at runtime, not at build time
+- **every `interact.*` label the world code asks for has a translation** —
+  found by scanning `House/FarmInteractions.ts` for the literals, because these
+  keys live in code rather than in the content tables
 
 ### `tests/gameplay.test.ts` — 21 tests
 
@@ -107,9 +112,23 @@ Run before any release build.
 - [ ] complete every task in a day → day-end screen → day 2 starts
 - [ ] play to day 5+ and confirm generated days are varied and completable
 
+**Physical interaction** (regressions here are invisible to the unit tests)
+- [ ] breakfast: the child really fetches the plate, bread and milk one at a
+      time, sits, eats, and stands — nothing teleports into their hand
+- [ ] feeding: the hay is carried across the yard, SET DOWN, and the animal
+      walks over and eats it
+- [ ] the child's hands are empty at the end of every routine except milking,
+      which deliberately leaves them carrying the full bucket for `bringmilk`
+- [ ] no routine pays out twice when run from the task list
+
 **Interiors**
 - [ ] walking into the chalet fades the shell and reveals the rooms
-- [ ] the camera never ends up inside a wall looking at roof underside
+- [ ] the shell actually FADES — if it snaps between solid and gone, the
+      material version bump in `updateCutaways` has been lost
+- [ ] the camera swings round to the open front of the building, not to the
+      solid back wall, and never ends up inside a wall or the roof underside
+- [ ] the front door swings open as the child approaches and ghosts with the
+      wall while inside
 
 **Parents**
 - [ ] Mum and Dad move to different places as the phase changes

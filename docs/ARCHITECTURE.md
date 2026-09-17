@@ -31,9 +31,12 @@ src/
   content/       ALL game data: animals, activities, items, days, areas
   art/           Palette, material factory, procedural mesh construction
   world/         Terrain, sky, landscape, buildings, props, WorldBuilder
+                 Furniture + House/FarmInteractions (the interactive world)
+                 AmbientLife (butterflies, birds, chimney smoke)
   characters/    CharacterRig, Face, FamilyAgent
   animals/       AnimalRig, AnimalAgent
   gameplay/      Player, camera, input, interaction, activities, day, weather
+  gameplay/interact/  Physical interaction: sockets, props, hinges, the runner
   ui/            DOM overlay: HUD, screens, responsive layout
   monetization/  IStore + Entitlements
 ```
@@ -107,12 +110,61 @@ Tone mapping is **linear, not ACES**. A filmic curve is designed to tame
 photographic highlights; applied to a flat stylized palette it desaturates the
 greens and crushes the shadows.
 
+### Physical interaction, not menus
+
+The child does not select "breakfast" from a list and watch an animation. They
+walk to the dresser, pick up a plate, carry it to the table, put it down, fetch
+bread, pour milk, sit, eat, and stand up. `gameplay/interact/` is the machinery:
+
+- **`Prop`** — a carryable object. One at a time, held in the right hand.
+- **`Socket`** — a named slot something can be put into: a place at the table,
+  a hook for the egg basket, a shelf in the kitchen.
+- **`Seat`** — somewhere to sit, which changes the child's pose until they stand.
+- **`Hinge`** — a door or wardrobe leaf, with an open and closed angle.
+- **`Interactable`** — an object offering at most ONE verb at a time, decided
+  per frame from what the child is holding. A bucket offers "fill" at the well
+  and "pour" at the trough; nothing has a menu.
+- **`InteractStep`** — the vocabulary a sequence is written in: `walkTo`,
+  `takeProp`, `placeProp`, `dropProp`, `sit`, `swing`, `reward`, and so on.
+- **`InteractionRunner`** — plays a step list, tweening props along an arc so
+  they never slide through a table.
+
+Because every step is a real operation on a real object, a four-year-old can do
+them out of order, or just carry the bucket around, and nothing breaks.
+
+`dropProp` and `placeProp` are deliberately separate. Sockets model defined
+slots in furniture; a pile of hay set down in front of a cow is not a slot, and
+inventing an invisible socket per animal per feed would have been the wrong
+shape.
+
+The scheduled activities delegate to these sequences rather than duplicating
+them, so the day's task list and free play drive exactly the same actions. A
+routine owns its own payout, since it is the thing actually performed; the
+activity that delegates declares none, so nothing pays twice.
+
 ### Doll's-house cutaway instead of interior scenes
 
 Walking into the chalet does not load anything. The building's shell fades out
 and the interior — always present — is revealed. `updateCutaways` triggers on
 either the child *or the camera* entering the footprint, because walking along
 an outside wall can put the camera indoors.
+
+Two things this depends on that are easy to get wrong:
+
+- **The fade has to reach the GPU.** three only re-uploads a material's uniforms
+  when its version changes, so damping `material.opacity` toward zero does
+  nothing on its own — the walls stay solid at any setting. `updateCutaways`
+  bumps the version while the value is moving and settles exactly so it stops.
+- **The camera has to be on the open face.** A doll's-house interior keeps its
+  back and side walls so a room reads as a room; only ONE face is left open. A
+  camera anywhere else sees the back of a solid wall however far the shell has
+  faded. Each cutaway therefore carries `openTheta`, and indoors the camera
+  orbits the *building* at its own radius — not the child, whose boom would end
+  up inside a wall whenever they stood at the back of a deep room — and drops
+  nearly level to look in under the upper floor.
+
+A door set in a wall shares that wall's material, so it ghosts with it
+automatically instead of needing its own list.
 
 Every room the child uses is on the **ground floor**, so a four-year-old never
 has to navigate stairs to reach a task.
@@ -153,8 +205,9 @@ refusing a purchase to a connected player is worse than attempting one offline.
 ## Frame order
 
 ```
-input → activities → player → animals → parents → interaction → discoveries
-      → camera → sky → weather → water → wind → cutaways → audio → HUD → render
+input → interactables → house → runner → activities → player → animals
+      → parents → interaction → discoveries → camera → sky → weather → water
+      → wind → ambient life → cutaways → audio → HUD → render
 ```
 
 Simulation before presentation; the camera reads a settled player position, and

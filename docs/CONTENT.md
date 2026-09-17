@@ -90,9 +90,36 @@ should be able to say "Luna is the nosy chicken" after two days.
 | `cameraFocus` | pull the camera to a point | `target`, `duration` |
 | `fadeTo` | screen fade (bedtime) | `duration` |
 | `setFlag` | record a one-off story beat | `flag` |
+| `routine` | hand off to a PHYSICAL routine | `flag` (the routine's name) |
 
 Clip names are the `ClipName` union in `src/characters/CharacterRig.ts`. Adding
 a clip means adding a case to `applyClip` — about 15 lines of sine curves.
+
+#### `routine`: prefer it to a list of `animate` steps
+
+`routine` hands control to a sequence of real pick-up / carry / place / sit
+operations registered by the world, instead of playing canned animations at a
+target. `{ kind: 'routine', flag: 'feedcow' }` makes the child walk to the hay
+store, lift a bale, carry it across the yard, set it down, and the cow come over
+and eat it.
+
+Routines currently registered:
+
+| name | source |
+|---|---|
+| `breakfast`, `bedtime` | `world/HouseInteractions.ts` |
+| `feedcow`, `feedsheep`, `feedchickens` | `world/FarmInteractions.ts` |
+| `milkcow`, `collecteggs`, `watercow` | `world/FarmInteractions.ts` |
+
+Two rules:
+
+1. **The routine owns the payout.** It is the thing the player actually
+   performs, and it can also be triggered from free play. An activity that
+   delegates to one declares `rewards: { hearts: 0 }` and no items, or the
+   child is paid twice for one act.
+2. **The name must resolve.** `HOUSE_ROUTINE_IDS` and `FARM_ROUTINE_IDS` are
+   exported for exactly this, and `tests/content.test.ts` fails the build if an
+   activity names a routine nothing registers.
 
 ### Scheduling rules
 
