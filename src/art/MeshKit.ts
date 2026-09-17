@@ -11,6 +11,7 @@ import {
   Matrix4,
   Mesh,
   Quaternion,
+  PlaneGeometry,
   SphereGeometry,
   TorusGeometry,
   Vector2,
@@ -226,6 +227,22 @@ export function geoSphere(r: number, seg = 10): BufferGeometry {
 
 export function geoCapsule(r: number, len: number): BufferGeometry {
   return cached(`p${r},${len}`, () => new CapsuleGeometry(r, len, 4, 10));
+}
+
+/**
+ * Two-triangle quad, standing upright in the XY plane.
+ *
+ * Grass blades and petals are flat cards, and a BoxGeometry spends 12
+ * triangles to show 2 of them. At ~5000 tufts that difference is the whole
+ * vegetation budget, so foliage uses this and a double-sided material.
+ */
+export function geoQuad(w: number, h: number): BufferGeometry {
+  return cached(`q${w},${h}`, () => {
+    const geo = new PlaneGeometry(w, h);
+    // Origin at the bottom edge so a blade grows upward from its root.
+    geo.translate(0, h / 2, 0);
+    return geo;
+  });
 }
 
 export function geoCircle(r: number, seg = 16): BufferGeometry {

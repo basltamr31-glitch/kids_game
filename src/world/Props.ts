@@ -10,8 +10,9 @@ import {
   Vector3,
   Euler,
   StaticDrawUsage,
+  LOD,
 } from 'three';
-import { PartBuilder, geoBox, mergeGeometries, paint, setNormalsUp } from '../art/MeshKit';
+import { PartBuilder, geoQuad, mergeGeometries, paint, setNormalsUp } from '../art/MeshKit';
 import { M } from '../art/Materials';
 import { color } from '../art/Palette';
 import { clamp01, type Rng } from '../core/Rng';
@@ -221,9 +222,9 @@ function buildTuft(blades: number, curve: boolean, rng: Rng): BufferGeometry {
     const w = rng.range(0.055, 0.085);
 
     if (!curve) {
-      // Far LOD: one straight quad per blade.
-      b.add(geoBox(w, h, 0.01), 'grassMid', {
-        pos: [Math.cos(a) * 0.02, h * 0.5, Math.sin(a) * 0.02],
+      // Far LOD: one straight quad per blade. 2 triangles.
+      b.add(geoQuad(w, h), 'grassMid', {
+        pos: [Math.cos(a) * 0.02, 0, Math.sin(a) * 0.02],
         rot: [0, a, lean * 0.5],
       });
       continue;
@@ -238,10 +239,10 @@ function buildTuft(blades: number, curve: boolean, rng: Rng): BufferGeometry {
       const segW = w * (1 - s * 0.24);
       tilt += lean / segs;
       const offset = Math.sin(tilt) * segH * s * 0.5;
-      b.add(geoBox(segW, segH, 0.01), 'grassMid', {
+      b.add(geoQuad(segW, segH), 'grassMid', {
         pos: [
           Math.cos(a) * (0.02 + offset),
-          y + segH * 0.5,
+          y,
           Math.sin(a) * (0.02 + offset),
         ],
         rot: [0, a, tilt],
@@ -387,18 +388,18 @@ export function buildScatterProps(
   b.cylinder(0.015, 0.022, 0.34, 'grassDeep', { pos: [0, 0.17, 0] }, 4);
   // Two leaves low on the stem.
   for (const side of [-1, 1]) {
-    b.add(geoBox(0.09, 0.02, 0.05), 'grassDeep', {
-      pos: [side * 0.05, 0.1, 0],
-      rot: [0, 0, side * 0.5],
+    b.add(geoQuad(0.09, 0.05), 'grassDeep', {
+      pos: [side * 0.05, 0.09, 0],
+      rot: [1.35, 0, side * 0.5],
     });
   }
   // Petals, angled up slightly so the flower faces the sky.
   const petals = 6;
   for (let i = 0; i < petals; i++) {
     const a = (i / petals) * Math.PI * 2;
-    b.add(geoBox(0.11, 0.025, 0.06), 'meadowFlowerA', {
-      pos: [Math.cos(a) * 0.065, 0.35, Math.sin(a) * 0.065],
-      rot: [0, -a, -0.35],
+    b.add(geoQuad(0.06, 0.11), 'meadowFlowerA', {
+      pos: [Math.cos(a) * 0.065, 0.34, Math.sin(a) * 0.065],
+      rot: [1.2, -a, 0],
     });
   }
   b.sphere(0.04, 'sunGold', { pos: [0, 0.37, 0] }, 6);
@@ -457,7 +458,7 @@ export function buildGroundClutter(
   const b = new PartBuilder();
   b.sphere(0.07, 'rock', { pos: [0.05, 0.02, 0], scale: [1.4, 0.55, 1.1] }, 5);
   b.sphere(0.045, 'rockDark', { pos: [-0.07, 0.015, 0.05], scale: [1.2, 0.5, 1] }, 5);
-  b.add(geoBox(0.16, 0.018, 0.02), 'trunkDark', { pos: [0, 0.01, -0.07], rot: [0, 0.7, 0] });
+  b.box(0.16, 0.018, 0.02, 'trunkDark', { pos: [0, 0.01, -0.07], rot: [0, 0.7, 0] });
   const geometry = b.build({ ao: false });
   paint(geometry, '#FFFFFF');
 
@@ -539,6 +540,16 @@ export function buildRocks(rng: Rng, terrain: Terrain, spec: ScatterSpec): Insta
  * Plants trees as individual meshes sharing a small pool of geometries, so
  * variety is nearly free. Each pool entry is its own random tree.
  */
+/**
+ * Plants trees, each as a two-level LOD.
+ *
+ * Trees are the single largest triangle consumer in the world: a detailed
+ * canopy is ~1.5k triangles and the valley holds a few hundred of them. Beyond
+ * about 45m nobody can resolve an individual bough, so the far level drops to
+ * a coarse silhouette built at detail 0. three's LOD handles the switch, and
+ * because the geometries are shared across a small pool the extra variants are
+ * nearly free in memory.
+ */
 export function plantTrees(
   rng: Rng,
   terrain: Terrain,
@@ -550,18 +561,28 @@ export function plantTrees(
   const group = new Group();
   group.name = 'trees';
 
-  const variants: BufferGeometry[] = [];
-  const poolSize = quality.treeDetail === 0 ? 4 : 7;
+  // Each pool entry is one tree with a near and a far geometry. Both are built
+  // from the same seeded stream so the silhouettes match across the switch.
+  const pool: { near: BufferGeometry; far: BufferGeometry }[] = [];
+  const poolSize = quality.treeDetail === 0 ? 4 : 6;
   for (let i = 0; i < poolSize; i++) {
     const useConifer = kind === 'conifer' || (kind === 'mixed' && rng.bool(0.6));
-    variants.push(
-      useConifer
-        ? buildConifer(rng, quality.treeDetail, season)
-        : buildDeciduous(rng, quality.treeDetail, season),
-    );
+    const seed = rng.fork(`tree-${i}`);
+    const nearSeed = seed.fork('near');
+    const farSeed = seed.fork('near'); // same label: same shape, lower detail
+    pool.push({
+      near: useConifer
+        ? buildConifer(nearSeed, quality.treeDetail, season)
+        : buildDeciduous(nearSeed, quality.treeDetail, season),
+      far: useConifer
+        ? buildConifer(farSeed, 0, season)
+        : buildDeciduous(farSeed, 0, season),
+    });
   }
 
   const material = M.foliage(0.45);
+  const nearDistance = quality.treeDetail === 0 ? 24 : 45;
+
   let placed = 0;
   let attempts = 0;
   while (placed < spec.count && attempts < spec.count * 12) {
@@ -571,17 +592,29 @@ export function plantTrees(
     if (spec.accept && !spec.accept(x, z)) continue;
     if (terrain.slopeAt(x, z) > 0.55) continue;
 
-    const mesh = new Mesh(rng.pick(variants), material);
-    mesh.position.set(x, terrain.heightAt(x, z) - 0.25, z);
-    mesh.rotation.y = rng.range(0, Math.PI * 2);
+    const variant = rng.pick(pool);
+    const lod = new LOD();
+
+    const near = new Mesh(variant.near, material);
+    near.castShadow = true;
+    near.receiveShadow = true;
+    lod.addLevel(near, 0);
+
+    const far = new Mesh(variant.far, material);
+    // Distant trees do not cast shadows: the shadow frustum only covers the
+    // farmyard anyway, so the cost would buy nothing.
+    far.castShadow = false;
+    far.receiveShadow = true;
+    lod.addLevel(far, nearDistance);
+
+    lod.position.set(x, terrain.heightAt(x, z) - 0.25, z);
+    lod.rotation.y = rng.range(0, Math.PI * 2);
     // A slight lean downhill reads as a tree that grew where it stands.
     const normal = terrain.normalAt(x, z);
-    mesh.rotation.x = normal.z * 0.18;
-    mesh.rotation.z = -normal.x * 0.18;
-    mesh.scale.setScalar(rng.range(0.72, 1.3));
-    mesh.castShadow = true;
-    mesh.receiveShadow = true;
-    group.add(mesh);
+    lod.rotation.x = normal.z * 0.18;
+    lod.rotation.z = -normal.x * 0.18;
+    lod.scale.setScalar(rng.range(0.72, 1.3));
+    group.add(lod);
     placed++;
   }
   return group;
@@ -812,8 +845,8 @@ export function buildGarden(rng: Rng, season: Season): Group {
       for (let leaf = 0; leaf < leaves; leaf++) {
         const a = (leaf / leaves) * Math.PI * 2 + rng.range(-0.3, 0.3);
         const droop = rng.range(0.4, 0.8);
-        b.add(geoBox(0.1, 0.36, 0.22), leafTint, {
-          pos: [x + Math.cos(a) * 0.12, 0.54, z + Math.sin(a) * 0.12],
+        b.add(geoQuad(0.18, 0.34), leafTint, {
+          pos: [x + Math.cos(a) * 0.12, 0.38, z + Math.sin(a) * 0.12],
           rot: [Math.sin(a) * droop, -a, Math.cos(a) * droop],
         });
       }
