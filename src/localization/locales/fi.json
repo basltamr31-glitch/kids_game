@@ -1,7 +1,6 @@
 {
   "app.title": "Pienet Alppipäivät",
   "boot.loading": "Laakso herää…",
-
   "common.ok": "OK",
   "common.cancel": "Peruuta",
   "common.back": "Takaisin",
@@ -12,7 +11,6 @@
   "common.done": "Valmis",
   "common.on": "Päällä",
   "common.off": "Pois",
-
   "welcome.title": "Kuka olet tänään?",
   "welcome.boy": "Poika",
   "welcome.girl": "Tyttö",
@@ -21,29 +19,24 @@
   "welcome.haircolor": "Hiusten väri",
   "welcome.outfit": "Vaatteet",
   "welcome.start": "Mennään!",
-
   "hud.day": "Päivä {day}",
   "hud.tasks": "Tekemistä",
   "hud.notasks": "Nauti vain päivästä!",
   "hud.hearts": "{count} sydäntä",
-
   "phase.morning": "Aamu",
   "phase.midday": "Keskipäivä",
   "phase.afternoon": "Iltapäivä",
   "phase.evening": "Ilta",
   "phase.night": "Yö",
-
   "weather.sunny": "Aurinkoista",
   "weather.cloudy": "Pilvistä",
   "weather.rain": "Sateista",
   "weather.snow": "Lumista",
   "weather.fog": "Sumuista",
-
   "season.spring": "Kevät",
   "season.summer": "Kesä",
   "season.autumn": "Syksy",
   "season.winter": "Talvi",
-
   "activity.wakeup": "Nouse sängystä",
   "activity.getdressed": "Pukeudu",
   "activity.breakfast": "Syö aamiaista",
@@ -70,7 +63,6 @@
   "activity.indoorplay": "Leiki sisällä",
   "activity.smellflowers": "Haistele kukkia",
   "activity.visitstream": "Käy purolla",
-
   "prompt.feed": "Ruoki",
   "prompt.water": "Kastele",
   "prompt.milk": "Lypsä",
@@ -85,7 +77,6 @@
   "prompt.sleep": "Nuku",
   "prompt.look": "Katso",
   "prompt.play": "Leiki",
-
   "item.hay": "Heinä",
   "item.grain": "Jyvät",
   "item.bucket": "Ämpäri",
@@ -96,7 +87,6 @@
   "item.tomato": "Tomaatti",
   "item.wateringcan": "Kastelukannu",
   "item.flower": "Kukka",
-
   "animal.bella": "Bella",
   "animal.rosie": "Ruusu",
   "animal.milo": "Milo",
@@ -105,11 +95,9 @@
   "animal.luna": "Luna",
   "animal.speckle": "Pilkku",
   "animal.henny": "Kanerva",
-
   "actor.mother": "Äiti",
   "actor.father": "Isä",
   "actor.child": "Sinä",
-
   "speech.mother.goodmorning.1": "Huomenta, unikeko!",
   "speech.mother.goodmorning.2": "Siinähän sinä olet! Aamiainen on valmis.",
   "speech.mother.goodmorning.3": "Huomenta! Katso kuinka aurinkoista on.",
@@ -123,7 +111,6 @@
   "speech.mother.dinner.1": "Ruoka on valmista. Tule istumaan!",
   "speech.mother.goodnight.1": "Hyvää yötä. Nuku hyvin, pikkuinen.",
   "speech.mother.rain.1": "Sataa. Jäädäänkö sisälle lämpimään?",
-
   "speech.father.hello.1": "Moi! Valmiina mukavaan päivään?",
   "speech.father.hello.2": "Huomenta! Laakso näyttää ihanalta.",
   "speech.father.thanks.1": "Hienoa työtä. Kiitos!",
@@ -132,10 +119,8 @@
   "speech.father.animals.1": "Lampaat syövät aina ensin, saat nähdä.",
   "speech.father.goodnight.1": "Hyvää yötä. Nähdään aamulla.",
   "speech.father.snow.1": "Katso ulos — lunta kaikkialla!",
-
   "speech.child.happy.1": "Jee!",
   "speech.child.wow.1": "Vau!",
-
   "toast.fed": "{name} on iloinen!",
   "toast.collected": "Keräsit {count} {item}",
   "toast.watered": "Kasvit näyttävät iloisilta",
@@ -145,18 +130,15 @@
   "toast.carrying": "Kannat: {item}",
   "toast.handsfull": "Kätesi ovat täynnä",
   "toast.locked": "Tämä osa laaksosta odottaa sinua vielä",
-
   "dayend.title": "Tänään oli ihana päivä!",
   "dayend.tasks": "Autoit {count} kertaa",
   "dayend.hearts": "{count} sydäntä",
   "dayend.discoveries": "{count} uutta löytöä",
   "dayend.next": "Aloita päivä {day}",
   "dayend.goodnight": "Hyvää yötä!",
-
   "naturebook.title": "Luontokirja",
   "naturebook.empty": "Tutki laaksoa ja löydä jotain!",
   "naturebook.found": "{found}/{total} löydetty",
-
   "discovery.butterfly": "Perhonen",
   "discovery.bluebird": "Sininen lintu",
   "discovery.mushroom": "Sieni",
@@ -167,19 +149,16 @@
   "discovery.rabbit": "Villikani",
   "discovery.pinecone": "Käpy",
   "discovery.rainbow": "Sateenkaari",
-
   "sticker.firstday": "Ensimmäinen päiväni",
   "sticker.animalfriend": "Eläinten ystävä",
   "sticker.gardener": "Pieni puutarhuri",
   "sticker.explorer": "Tutkimusmatkailija",
   "sticker.helper": "Paras auttaja",
   "sticker.weekone": "Kokonainen viikko",
-
   "parent.gate.title": "Aikuisille",
   "parent.gate.instruction": "Paina ja pidä painiketta pohjassa 3 sekuntia.",
   "parent.gate.hold": "Pidä pohjassa tästä",
   "parent.gate.hint": "Näin asetukset pysyvät turvassa pikkusormilta.",
-
   "parent.area.title": "Vanhempien alue",
   "parent.area.sound": "Ääni",
   "parent.area.music": "Musiikki",
@@ -204,7 +183,6 @@
   "parent.area.reset.confirm": "Tämä poistaa kaiken edistymisen. Oletko varma?",
   "parent.area.about": "Pienet Alppipäivät v{version}",
   "parent.area.offline": "Tämä peli toimii täysin ilman verkkoyhteyttä eikä kerää henkilötietoja.",
-
   "store.title": "Avaa koko peli",
   "store.body": "Yksi ostos. Ei tilausmaksua. Ei mainoksia. Kaikki auki ikuisesti.",
   "store.feature.animals": "Hevonen, vuohia, kaneja ja maatilan koira",
@@ -221,17 +199,38 @@
   "store.restored": "Ostoksesi on palautettu.",
   "store.norestore": "Aiempaa ostosta ei löytynyt.",
   "store.offline": "Verkkoyhteyttä tarvitaan vain tähän ostokseen.",
-
   "locked.title": "Osa koko peliä",
   "locked.body": "Pyydä aikuista avaamaan koko laakso.",
   "locked.ask": "Näytä aikuiselle",
-
   "credits.title": "Tekijät",
   "credits.body": "Tehty huolella uteliaille lapsille ja heidän perheilleen.\nKaikki pelin kuvat, musiikki ja äänet ovat alkuperäisiä.",
-
   "a11y.move": "Liikuta lasta",
   "a11y.camera": "Liikuta kameraa",
   "a11y.interact": "Toimi",
   "a11y.menu": "Avaa valikko",
-  "a11y.tasks": "Näytä päivän tehtävät"
+  "a11y.tasks": "Näytä päivän tehtävät",
+  "prompt.close": "Sulje",
+  "prompt.sit": "Istu",
+  "prompt.stand": "Nouse",
+  "prompt.place": "Laske",
+  "prompt.wash": "Pese",
+  "prompt.brush": "Harjaa",
+  "prompt.eat": "Syö",
+  "prompt.drink": "Juo",
+  "prompt.pour": "Kaada",
+  "interact.takeplate": "Ota lautanen",
+  "interact.takebread": "Ota leipää",
+  "interact.takemilk": "Ota maito",
+  "interact.takeglass": "Ota lasi",
+  "interact.puton": "Laske tähän",
+  "interact.sit": "Istu pöytään",
+  "interact.standup": "Nouse ylös",
+  "interact.eat": "Syö aamiaista",
+  "interact.drink": "Juo maito",
+  "interact.pour": "Kaada maitoa",
+  "interact.wash": "Pese kädet",
+  "interact.brush": "Harjaa hampaat",
+  "interact.sleep": "Katso sänkyäsi",
+  "interact.getdressed": "Avaa vaatekaappi",
+  "interact.play": "Leiki nallen kanssa"
 }

@@ -53,13 +53,10 @@ export const ACTIVITIES: ActivityDefinition[] = [
     icon: '🥣',
     verb: 'use',
     anchor: 'dinnertable',
-    steps: [
-      { kind: 'walkTo', target: 'dinnertable' },
-      { kind: 'face', target: 'mother' },
-      { kind: 'speech', target: 'mother', textKey: 'speech.mother.goodmorning', duration: 2.4 },
-      { kind: 'animate', clip: 'sitEat', duration: 2.4 },
-      { kind: 'emote', target: 'child', emote: '😊', duration: 1.2 },
-    ],
+    // Physical: fetch a plate, lay it, fetch bread, put it on the plate,
+    // fetch a glass, pour the milk, sit, eat, drink, stand. Every one of those
+    // is also available as an individual object the child can tap directly.
+    steps: [{ kind: 'routine', flag: 'breakfast' }],
     rewards: { hearts: 1 },
     phases: ['morning'],
     weight: 0,
@@ -503,10 +500,8 @@ export const ACTIVITIES: ActivityDefinition[] = [
     verb: 'sleep',
     anchor: 'bed',
     steps: [
-      { kind: 'walkTo', target: 'bed' },
-      { kind: 'cameraFocus', target: 'bedroomwindow', duration: 3.2 },
-      { kind: 'speech', target: 'mother', textKey: 'speech.mother.goodnight', duration: 2.6 },
-      { kind: 'animate', clip: 'sleep', duration: 2.0 },
+      { kind: 'routine', flag: 'bedtime' },
+      { kind: 'cameraFocus', target: 'bedroomwindow', duration: 2.6 },
       { kind: 'fadeTo', duration: 2.0 },
     ],
     rewards: { hearts: 2 },

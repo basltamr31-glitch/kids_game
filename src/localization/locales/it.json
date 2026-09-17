@@ -1,7 +1,6 @@
 {
   "app.title": "Piccoli Giorni Alpini",
   "boot.loading": "La valle si sta svegliando…",
-
   "common.ok": "OK",
   "common.cancel": "Annulla",
   "common.back": "Indietro",
@@ -12,7 +11,6 @@
   "common.done": "Fatto",
   "common.on": "Acceso",
   "common.off": "Spento",
-
   "welcome.title": "Chi sei oggi?",
   "welcome.boy": "Bambino",
   "welcome.girl": "Bambina",
@@ -21,29 +19,24 @@
   "welcome.haircolor": "Colore dei capelli",
   "welcome.outfit": "Vestiti",
   "welcome.start": "Andiamo!",
-
   "hud.day": "Giorno {day}",
   "hud.tasks": "Cose da fare",
   "hud.notasks": "Goditi la giornata!",
   "hud.hearts": "{count} cuori",
-
   "phase.morning": "Mattina",
   "phase.midday": "Mezzogiorno",
   "phase.afternoon": "Pomeriggio",
   "phase.evening": "Sera",
   "phase.night": "Notte",
-
   "weather.sunny": "Soleggiato",
   "weather.cloudy": "Nuvoloso",
   "weather.rain": "Piovoso",
   "weather.snow": "Nevoso",
   "weather.fog": "Nebbioso",
-
   "season.spring": "Primavera",
   "season.summer": "Estate",
   "season.autumn": "Autunno",
   "season.winter": "Inverno",
-
   "activity.wakeup": "Alzarsi dal letto",
   "activity.getdressed": "Vestirsi",
   "activity.breakfast": "Fare colazione",
@@ -70,7 +63,6 @@
   "activity.indoorplay": "Gioca in casa",
   "activity.smellflowers": "Annusa i fiori",
   "activity.visitstream": "Vai al ruscello",
-
   "prompt.feed": "Nutri",
   "prompt.water": "Innaffia",
   "prompt.milk": "Mungi",
@@ -85,7 +77,6 @@
   "prompt.sleep": "Dormi",
   "prompt.look": "Guarda",
   "prompt.play": "Gioca",
-
   "item.hay": "Fieno",
   "item.grain": "Granaglie",
   "item.bucket": "Secchio",
@@ -96,7 +87,6 @@
   "item.tomato": "Pomodoro",
   "item.wateringcan": "Annaffiatoio",
   "item.flower": "Fiore",
-
   "animal.bella": "Bella",
   "animal.rosie": "Rosina",
   "animal.milo": "Milo",
@@ -105,11 +95,9 @@
   "animal.luna": "Luna",
   "animal.speckle": "Macchietta",
   "animal.henny": "Gallinella",
-
   "actor.mother": "Mamma",
   "actor.father": "Papà",
   "actor.child": "Tu",
-
   "speech.mother.goodmorning.1": "Buongiorno, dormiglione!",
   "speech.mother.goodmorning.2": "Eccoti! La colazione è pronta.",
   "speech.mother.goodmorning.3": "Buongiorno! Guarda che sole.",
@@ -123,7 +111,6 @@
   "speech.mother.dinner.1": "La cena è pronta. Vieni a sederti!",
   "speech.mother.goodnight.1": "Buonanotte. Dormi bene, tesoro.",
   "speech.mother.rain.1": "Piove. Restiamo al calduccio in casa?",
-
   "speech.father.hello.1": "Ciao! Pronto per una bella giornata?",
   "speech.father.hello.2": "Buongiorno! La valle è splendida.",
   "speech.father.thanks.1": "Ottimo lavoro. Grazie!",
@@ -132,10 +119,8 @@
   "speech.father.animals.1": "Le pecore mangiano sempre per prime, vedrai.",
   "speech.father.goodnight.1": "Buonanotte. A domani mattina.",
   "speech.father.snow.1": "Guarda fuori — neve dappertutto!",
-
   "speech.child.happy.1": "Evviva!",
   "speech.child.wow.1": "Wow!",
-
   "toast.fed": "{name} è felice!",
   "toast.collected": "Hai raccolto {count} {item}",
   "toast.watered": "Le piante sembrano felici",
@@ -145,18 +130,15 @@
   "toast.carrying": "Stai portando {item}",
   "toast.handsfull": "Hai le mani piene",
   "toast.locked": "Questa parte della valle ti sta ancora aspettando",
-
   "dayend.title": "Oggi è stata una giornata bellissima!",
   "dayend.tasks": "Hai aiutato {count} volte",
   "dayend.hearts": "{count} cuori",
   "dayend.discoveries": "{count} nuove scoperte",
   "dayend.next": "Inizia il giorno {day}",
   "dayend.goodnight": "Buonanotte!",
-
   "naturebook.title": "Libro della natura",
   "naturebook.empty": "Esplora la valle per trovare qualcosa!",
   "naturebook.found": "{found} di {total} trovati",
-
   "discovery.butterfly": "Farfalla",
   "discovery.bluebird": "Uccellino azzurro",
   "discovery.mushroom": "Fungo",
@@ -167,19 +149,16 @@
   "discovery.rabbit": "Coniglio selvatico",
   "discovery.pinecone": "Pigna",
   "discovery.rainbow": "Arcobaleno",
-
   "sticker.firstday": "Il mio primo giorno",
   "sticker.animalfriend": "Amico degli animali",
   "sticker.gardener": "Piccolo giardiniere",
   "sticker.explorer": "Esploratore",
   "sticker.helper": "Il miglior aiutante",
   "sticker.weekone": "Una settimana intera",
-
   "parent.gate.title": "Per i grandi",
   "parent.gate.instruction": "Tieni premuto il pulsante per 3 secondi.",
   "parent.gate.hold": "Tieni premuto qui",
   "parent.gate.hint": "Così le impostazioni restano al sicuro dalle manine.",
-
   "parent.area.title": "Area genitori",
   "parent.area.sound": "Audio",
   "parent.area.music": "Musica",
@@ -204,7 +183,6 @@
   "parent.area.reset.confirm": "Questo cancella tutti i progressi. Sei sicuro?",
   "parent.area.about": "Piccoli Giorni Alpini v{version}",
   "parent.area.offline": "Questo gioco funziona completamente offline e non raccoglie dati personali.",
-
   "store.title": "Sblocca il gioco completo",
   "store.body": "Un solo acquisto. Nessun abbonamento. Nessuna pubblicità. Tutto sbloccato per sempre.",
   "store.feature.animals": "Un cavallo, capre, conigli e un cane da fattoria",
@@ -221,17 +199,38 @@
   "store.restored": "Il tuo acquisto è stato ripristinato.",
   "store.norestore": "Nessun acquisto precedente trovato.",
   "store.offline": "Serve una connessione solo per questo acquisto.",
-
   "locked.title": "Parte del gioco completo",
   "locked.body": "Chiedi a un adulto di sbloccare tutta la valle.",
   "locked.ask": "Mostra a un adulto",
-
   "credits.title": "Riconoscimenti",
   "credits.body": "Fatto con cura per i bambini curiosi e le loro famiglie.\nTutte le immagini, le musiche e i suoni di questo gioco sono originali.",
-
   "a11y.move": "Muovi il bambino",
   "a11y.camera": "Muovi la telecamera",
   "a11y.interact": "Interagisci",
   "a11y.menu": "Apri il menu",
-  "a11y.tasks": "Mostra le cose da fare oggi"
+  "a11y.tasks": "Mostra le cose da fare oggi",
+  "prompt.close": "Chiudi",
+  "prompt.sit": "Siediti",
+  "prompt.stand": "Alzati",
+  "prompt.place": "Posa",
+  "prompt.wash": "Lava",
+  "prompt.brush": "Lava",
+  "prompt.eat": "Mangia",
+  "prompt.drink": "Bevi",
+  "prompt.pour": "Versa",
+  "interact.takeplate": "Prendi un piatto",
+  "interact.takebread": "Prendi il pane",
+  "interact.takemilk": "Prendi il latte",
+  "interact.takeglass": "Prendi un bicchiere",
+  "interact.puton": "Posa qui",
+  "interact.sit": "Siediti a tavola",
+  "interact.standup": "Alzati",
+  "interact.eat": "Fai colazione",
+  "interact.drink": "Bevi il latte",
+  "interact.pour": "Versa il latte",
+  "interact.wash": "Lavati le mani",
+  "interact.brush": "Lavati i denti",
+  "interact.sleep": "Guarda il tuo letto",
+  "interact.getdressed": "Apri l'armadio",
+  "interact.play": "Gioca con l'orsetto"
 }

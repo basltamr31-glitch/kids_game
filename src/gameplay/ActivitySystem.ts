@@ -8,6 +8,8 @@ import type { FamilyAgent } from '../characters/FamilyAgent';
 import type { BuiltWorld } from '../world/WorldBuilder';
 import type { CameraRig } from './CameraRig';
 import type { ClipName } from '../characters/CharacterRig';
+import type { InteractionRunner } from './interact/InteractionRunner';
+import type { InteractStep } from './interact/Interactable';
 
 /**
  * Plays an ActivityDefinition's steps.
@@ -48,6 +50,10 @@ export class ActivitySystem {
   private refs: ActivityWorldRefs;
   private ctx: GameContext;
   private speechVariant = 0;
+  /** Plays physical routines; supplied once the world is built. */
+  private runner: InteractionRunner | null = null;
+  /** Named physical chains the world registers, e.g. "breakfast". */
+  private routines = new Map<string, () => InteractStep[]>();
   private onComplete: ((activityId: string) => void) | null = null;
 
   constructor(ctx: GameContext, refs: ActivityWorldRefs) {
@@ -57,6 +63,17 @@ export class ActivitySystem {
 
   get isRunning(): boolean {
     return this.current !== null;
+  }
+
+  /**
+   * Connects the physical layer.
+   *
+   * Kept as a setter rather than a constructor argument because the world (and
+   * therefore its routines) is built after the activity system exists.
+   */
+  attachRunner(runner: InteractionRunner, routines: Record<string, () => InteractStep[]>): void {
+    this.runner = runner;
+    for (const [name, fn] of Object.entries(routines)) this.routines.set(name, fn);
   }
 
   get currentActivityId(): string | null {
@@ -290,6 +307,23 @@ export class ActivitySystem {
         this.ctx.bus.emit('ui:open', { screen: 'fade' });
         this.stepTimer = step.duration ?? 2;
         break;
+
+      case 'routine': {
+        const make = step.flag ? this.routines.get(step.flag) : undefined;
+        if (!make || !this.runner) {
+          // No routine registered: skip rather than stall the day.
+          console.warn(`[Activity] no routine registered for "${step.flag}"`);
+          this.stepTimer = 0;
+          break;
+        }
+        // The runner drives the player for as long as the chain lasts; we
+        // simply wait for it to report back.
+        this.stepTimer = Number.POSITIVE_INFINITY;
+        this.runner.play(make(), () => {
+          this.stepTimer = 0;
+        });
+        break;
+      }
 
       case 'setFlag':
         if (step.flag) {

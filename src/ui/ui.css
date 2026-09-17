@@ -415,6 +415,14 @@ body {
   50% { transform: translateY(calc(var(--u) * -0.4)) scale(1.04); }
 }
 
+/* Physical objects get a green ring, scheduled chores the gold one. It tells
+   the child "this is a thing in the world" apart from "this is your list",
+   without a word of text. */
+.prompt--object .prompt__bubble {
+  border-color: var(--green);
+  animation-duration: 2.4s;
+}
+
 .prompt__tail {
   width: 0;
   height: 0;

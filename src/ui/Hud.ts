@@ -4,7 +4,7 @@ import type { GameContext } from '../core/GameContext';
 import type { InteractionSystem } from '../gameplay/InteractionSystem';
 import type { DayDirector } from '../gameplay/DayDirector';
 import type { CameraRig } from '../gameplay/CameraRig';
-import { ACTIVITIES_BY_ID } from '../content';
+
 import type { Weather } from '../save/SaveSchema';
 
 /**
@@ -248,14 +248,8 @@ export class Hud {
       return;
     }
 
-    const activity = ACTIVITIES_BY_ID.get(prompt.activity.id);
-    if (!activity) {
-      this.promptNode.style.opacity = '0';
-      return;
-    }
-
     this.projected.copy(prompt.position);
-    this.projected.y += this.interaction.promptHeight(activity.anchor);
+    this.projected.y += prompt.bubbleHeight;
     this.projected.project(this.camera.camera);
 
     // Behind the camera: hide rather than draw a mirrored ghost.
@@ -269,8 +263,11 @@ export class Hud {
 
     this.promptNode.style.transform = `translate(-50%, -100%) translate(${x}px, ${y}px)`;
     this.promptNode.style.opacity = '1';
-    this.promptIcon.textContent = activity.icon;
-    this.promptLabel.textContent = this.ctx.loc.t(activity.titleKey);
+    this.promptIcon.textContent = prompt.icon;
+    this.promptLabel.textContent = this.ctx.loc.t(prompt.labelKey);
+    // Physical interactions get a warmer ring than scheduled chores, so the
+    // child can tell "this is a thing in the world" from "this is your list".
+    this.promptNode.classList.toggle('prompt--object', prompt.source === 'interactable');
   }
 
   /* ---------------- transient feedback ---------------- */

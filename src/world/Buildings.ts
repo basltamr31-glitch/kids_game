@@ -233,133 +233,107 @@ function addWindow(b: PartBuilder, x: number, y: number, z: number, rotY: number
 }
 
 /**
- * Interior.
+ * Interior architecture only.
  *
- * Every room the child actually uses is on the GROUND floor - kitchen, dining,
- * living corner, the child's bedroom and the bathroom. That is a normal layout
- * for an alpine farmhouse and it means a four-year-old never has to navigate
- * stairs to reach a task. The upper floor holds the parents' room and is set
- * dressing: visible through the cutaway, never entered.
+ * Floors, walls, the fireplace and the stairs. Every piece of FURNITURE lives
+ * in `Furniture.ts` as a separate interactive object with sockets and seats,
+ * because a table you can put a plate on cannot be baked into a static mesh.
+ *
+ * Every room the child uses is on the GROUND floor, which is a normal layout
+ * for an alpine farmhouse and means a four-year-old never navigates stairs to
+ * reach a task. The upper floor is set dressing seen through the cutaway.
  */
 function buildChaletInterior(W: number, D: number, H1: number, upperY: number): Mesh {
   const b = new PartBuilder();
   const floorY = 0.72;
 
-  /* --- floors and the walls that stay when the shell fades --- */
-  b.box(W - 0.4, 0.14, D - 0.4, 'woodWarm', { pos: [0, floorY, 0] });
+  /* --- floor: laid as boards, running front to back --- */
+  const boards = 16;
+  for (let i = 0; i < boards; i++) {
+    const x = -(W - 0.4) / 2 + ((i + 0.5) * (W - 0.4)) / boards;
+    b.bevelBox((W - 0.4) / boards - 0.012, 0.14, D - 0.4, 0.008,
+      i % 3 === 0 ? 'woodMid' : i % 3 === 1 ? 'woodWarm' : 'woodBalcony',
+      { pos: [x, floorY, 0] });
+  }
   b.box(W - 0.4, 0.14, D - 0.4, 'woodMid', { pos: [0, upperY + 0.08, 0] });
-  b.box(W - 0.4, H1, 0.16, 'wallPlasterShade', { pos: [0, floorY + H1 / 2, -D / 2 + 0.3] });
+
+  /* --- walls that remain when the shell fades --- */
+  b.box(W - 0.4, H1, 0.18, 'wallPlasterShade', { pos: [0, floorY + H1 / 2, -D / 2 + 0.3] });
   for (const sx of [-1, 1]) {
-    b.box(0.16, H1, D - 0.6, 'wallPlasterShade', {
+    b.box(0.18, H1, D - 0.6, 'wallPlasterShade', {
       pos: [(sx * W) / 2 - sx * 0.3, floorY + H1 / 2, 0],
     });
   }
-  // Half-height dividers mark the rooms without hiding them from the camera.
-  b.box(0.14, 1.5, 4.4, 'woodMid', { pos: [1.6, floorY + 0.75, -3.0] });
-  b.box(4.6, 1.5, 0.14, 'woodMid', { pos: [4.6, floorY + 0.75, -0.8] });
-
-  /* ---------------- kitchen (back left) ---------------- */
-  b.box(4.6, 0.9, 0.9, 'woodMid', { pos: [-4.0, floorY + 0.45, -4.4] });
-  b.box(4.7, 0.12, 1.0, 'wallPlaster', { pos: [-4.0, floorY + 0.95, -4.4] });
-  b.box(1.0, 0.85, 0.85, 'metalDark', { pos: [-1.4, floorY + 0.43, -4.4] });
-  b.cylinder(0.3, 0.3, 0.3, 'metal', { pos: [-1.4, floorY + 1.0, -4.4] }, 10);
-  b.cylinder(0.32, 0.32, 0.06, 'bucketRim', { pos: [-1.4, floorY + 1.16, -4.4] }, 10);
-  b.box(3.2, 0.1, 0.4, 'woodDark', { pos: [-4.0, floorY + 1.9, -4.7] });
+  // Skirting, which is most of what makes an interior read as a room.
+  b.box(W - 0.4, 0.14, 0.06, 'woodDark', { pos: [0, floorY + 0.14, -D / 2 + 0.4] });
+  for (const sx of [-1, 1]) {
+    b.box(0.06, 0.14, D - 0.6, 'woodDark', { pos: [(sx * W) / 2 - sx * 0.42, floorY + 0.14, 0] });
+  }
+  // Exposed ceiling beams.
   for (let i = 0; i < 5; i++) {
-    b.cylinder(0.14, 0.12, 0.3, i % 2 ? 'flowerBoxRed' : 'windowGlass', {
-      pos: [-5.3 + i * 0.66, floorY + 2.05, -4.7],
-    }, 8);
-  }
-  // Hanging pans - a small detail that reads instantly as "kitchen".
-  for (let i = 0; i < 3; i++) {
-    b.cylinder(0.2, 0.2, 0.08, 'metal', { pos: [-5.6 + i * 0.5, floorY + 1.55, -4.6] }, 8);
+    b.bevelBox(W - 0.5, 0.18, 0.2, 0.03, 'woodDark', {
+      pos: [0, upperY - 0.14, -D / 2 + 1.2 + i * 2.1],
+    });
   }
 
-  /* ---------------- dining (centre) ---------------- */
-  b.box(2.8, 0.14, 1.6, 'woodWarm', { pos: [-1.4, floorY + 0.78, -1.4] });
-  for (const [dx, dz] of [[-1.2, -0.6], [1.2, -0.6], [-1.2, 0.6], [1.2, 0.6]] as const) {
-    b.box(0.12, 0.78, 0.12, 'woodDark', { pos: [-1.4 + dx, floorY + 0.39, -1.4 + dz] });
-  }
-  b.box(1.0, 0.04, 0.7, 'motherApron', { pos: [-1.4, floorY + 0.86, -1.4] });
-  for (let i = 0; i < 3; i++) {
-    b.cylinder(0.16, 0.13, 0.05, 'uiCream', { pos: [-2.2 + i * 0.8, floorY + 0.89, -1.4] }, 10);
-  }
-  for (const [cx, cz, rot] of [
-    [-1.4, -2.5, 0],
-    [-1.4, -0.3, Math.PI],
-    [-3.2, -1.4, Math.PI / 2],
-    [0.4, -1.4, -Math.PI / 2],
-  ] as const) {
-    b.box(0.6, 0.08, 0.6, 'woodMid', { pos: [cx, floorY + 0.46, cz] });
-    b.box(0.6, 0.7, 0.08, 'woodMid', {
-      pos: [cx - Math.sin(rot) * 0.28, floorY + 0.8, cz - Math.cos(rot) * 0.28],
-      rot: [0, rot, 0],
-    });
-    for (const [ox, oz] of [[-0.25, -0.25], [0.25, -0.25], [-0.25, 0.25], [0.25, 0.25]] as const) {
-      b.box(0.07, 0.46, 0.07, 'woodDark', { pos: [cx + ox, floorY + 0.23, cz + oz] });
+  /* --- half-height room dividers --- */
+  // They mark the rooms without hiding them from the cutaway camera.
+  b.bevelBox(0.16, 1.55, 4.4, 0.03, 'woodMid', { pos: [1.6, floorY + 0.78, -3.0] });
+  b.bevelBox(4.6, 1.55, 0.16, 0.03, 'woodMid', { pos: [4.6, floorY + 0.78, -0.8] });
+  b.bevelBox(0.16, 1.55, 3.2, 0.03, 'woodMid', { pos: [3.6, floorY + 0.78, 2.6] });
+
+  /* --- fireplace --- */
+  b.bevelBox(0.72, 2.3, 2.1, 0.05, 'stoneFoundation', { pos: [-6.3, floorY + 1.15, 1.2] });
+  // Coursed stone face.
+  for (let row = 0; row < 7; row++) {
+    for (let i = 0; i < 4; i++) {
+      b.bevelBox(0.1, 0.28, 0.48, 0.02, row % 2 ? 'rock' : 'rockDark', {
+        pos: [-5.94, floorY + 0.2 + row * 0.32, 0.4 + i * 0.52 + (row % 2) * 0.1],
+      });
     }
   }
-
-  /* ---------------- living corner (front left) ---------------- */
-  b.box(3.4, 0.04, 2.6, 'flowerBoxRed', { pos: [-4.2, floorY + 0.1, 2.6] });
-  b.box(2.6, 0.5, 1.0, 'fatherShirt', { pos: [-4.2, floorY + 0.38, 3.1] });
-  b.box(2.6, 0.7, 0.3, 'fatherShirt', { pos: [-4.2, floorY + 0.75, 3.6] });
-  for (const ox of [-0.8, 0.8]) {
-    b.box(0.6, 0.3, 0.8, 'motherDress', { pos: [-4.2 + ox, floorY + 0.62, 3.0] });
+  b.box(0.44, 0.92, 1.1, 'trunkDark', { pos: [-6.1, floorY + 0.5, 1.2] });
+  // Logs and a fire.
+  for (let i = 0; i < 4; i++) {
+    b.cylinder(0.07, 0.07, 0.5, 'trunk', {
+      pos: [-6.05, floorY + 0.12 + (i % 2) * 0.12, 1.0 + i * 0.12],
+      rot: [Math.PI / 2, 0, 0.2 + i * 0.3],
+    }, 6);
   }
-  b.box(1.0, 0.5, 0.7, 'woodWarm', { pos: [-4.2, floorY + 0.3, 1.6] });
-  // Fireplace on the side wall.
-  b.box(0.7, 2.2, 2.0, 'stoneFoundation', { pos: [-6.4, floorY + 1.1, 1.2] });
-  b.box(0.4, 0.9, 1.1, 'trunkDark', { pos: [-6.1, floorY + 0.5, 1.2] });
-  b.box(0.3, 0.45, 0.9, 'sunGold', { pos: [-6.0, floorY + 0.34, 1.2] });
-  b.box(0.9, 0.16, 2.2, 'woodDark', { pos: [-6.3, floorY + 1.7, 1.2] });
-  // Toy basket by the sofa.
-  b.cylinder(0.42, 0.36, 0.5, 'hay', { pos: [-2.4, floorY + 0.3, 3.4] }, 10);
-  for (let i = 0; i < 3; i++) {
-    const ball = i === 0 ? 'uiRed' : i === 1 ? 'uiBlue' : 'uiGold';
-    b.sphere(0.17, ball, { pos: [-2.4 + (i - 1) * 0.2, floorY + 0.58, 3.4] }, 7);
+  b.cone(0.22, 0.42, 'sunGold', { pos: [-6.05, floorY + 0.3, 1.2] }, 7);
+  b.cone(0.13, 0.28, 'chickenBeak', { pos: [-6.05, floorY + 0.34, 1.2] }, 6);
+  // Mantel with a couple of small objects on it.
+  b.bevelBox(0.9, 0.16, 2.3, 0.03, 'woodDark', { pos: [-6.2, floorY + 1.62, 1.2] });
+  b.lathe([[0, 0], [0.07, 0.01], [0.06, 0.14], [0.08, 0.17], [0, 0.17]], 'flowerBoxRed', {
+    pos: [-6.2, floorY + 1.7, 0.6],
+  }, 10);
+  b.box(0.1, 0.22, 0.16, 'uiBlue', { pos: [-6.2, floorY + 1.81, 1.7], rot: [0, 0.3, 0] });
+
+  /* --- stairs --- */
+  for (let i = 0; i < 9; i++) {
+    b.bevelBox(1.1, 0.16, 0.44, 0.02, 'woodMid', {
+      pos: [0.9, floorY + 0.2 + i * 0.34, 4.3 - i * 0.44],
+    });
+    b.box(1.0, 0.3, 0.05, 'woodDark', { pos: [0.9, floorY + 0.05 + i * 0.34, 4.1 - i * 0.44] });
+  }
+  // Stair rail.
+  for (let i = 0; i < 5; i++) {
+    b.bevelBox(0.07, 0.75, 0.07, 0.015, 'woodDark', {
+      pos: [1.48, floorY + 0.5 + i * 0.68, 4.2 - i * 0.88],
+    });
   }
 
-  /* ---------------- child's bedroom (back right) ---------------- */
-  b.box(1.6, 0.42, 2.4, 'woodWarm', { pos: [4.6, floorY + 0.3, -3.2] });
-  b.box(1.5, 0.28, 2.1, 'wallPlaster', { pos: [4.6, floorY + 0.64, -3.2] });
-  b.box(1.5, 0.3, 1.2, 'fatherShirt', { pos: [4.6, floorY + 0.74, -3.8] });
-  b.box(0.95, 0.24, 0.5, 'uiCream', { pos: [4.6, floorY + 0.86, -2.3] });
-  b.box(1.7, 1.3, 0.14, 'woodDark', { pos: [4.6, floorY + 0.95, -2.0] });
-  // Wardrobe.
-  b.box(1.4, 2.2, 0.75, 'woodMid', { pos: [2.5, floorY + 1.1, -4.2] });
-  b.box(0.62, 2.0, 0.08, 'woodDark', { pos: [2.16, floorY + 1.1, -3.83] });
-  b.box(0.62, 2.0, 0.08, 'woodDark', { pos: [2.86, floorY + 1.1, -3.83] });
-  b.sphere(0.07, 'metal', { pos: [2.52, floorY + 1.1, -3.76] }, 6);
-  // Toy chest and rug.
-  b.box(1.1, 0.62, 0.65, 'flowerBoxRed', { pos: [6.0, floorY + 0.31, -1.4] });
-  b.box(1.14, 0.1, 0.69, 'roofTileDark', { pos: [6.0, floorY + 0.65, -1.4] });
-  b.box(1.8, 0.04, 1.4, 'meadowFlowerB', { pos: [4.4, floorY + 0.08, -1.3] });
-
-  /* ---------------- bathroom (front right) ---------------- */
-  b.box(1.2, 0.18, 0.7, 'uiCream', { pos: [5.9, floorY + 0.9, 1.6] });
-  b.box(1.0, 0.8, 0.6, 'wallPlaster', { pos: [5.9, floorY + 0.45, 1.6] });
-  b.cylinder(0.05, 0.05, 0.3, 'metal', { pos: [5.9, floorY + 1.05, 1.35] }, 8);
-  b.box(0.85, 1.05, 0.08, 'windowGlass', {
-    pos: [6.4, floorY + 1.75, 1.6],
-    rot: [0, Math.PI / 2, 0],
-  });
-  b.box(1.8, 0.65, 1.0, 'uiCream', { pos: [5.6, floorY + 0.32, 3.4] });
-  b.cylinder(0.05, 0.05, 0.22, 'uiBlue', { pos: [5.6, floorY + 1.02, 1.5] }, 6);
-  b.box(0.5, 0.06, 0.3, 'motherApron', { pos: [4.9, floorY + 1.4, 2.4] });
-
-  /* ---------------- stairs + upper floor dressing ---------------- */
-  for (let i = 0; i < 8; i++) {
-    b.box(1.1, 0.16, 0.44, 'woodMid', { pos: [0.9, floorY + 0.2 + i * 0.38, 4.2 - i * 0.44] });
-  }
+  /* --- upper floor, seen through the cutaway --- */
   const uy = upperY + 0.16;
-  b.box(2.3, 0.42, 2.4, 'woodWarm', { pos: [3.2, uy + 0.3, 1.4] });
-  b.box(2.2, 0.28, 2.1, 'wallPlaster', { pos: [3.2, uy + 0.64, 1.4] });
-  b.box(2.2, 0.3, 1.2, 'motherDress', { pos: [3.2, uy + 0.74, 2.0] });
-  b.box(1.5, 2.2, 0.7, 'woodMid', { pos: [-4.0, uy + 1.1, -4.0] });
-  b.box(2.0, 0.04, 1.6, 'meadowFlowerC', { pos: [0.0, uy + 0.08, 0.6] });
+  b.bevelBox(2.3, 0.42, 2.4, 0.04, 'woodWarm', { pos: [3.2, uy + 0.3, 1.4] });
+  b.bevelBox(2.2, 0.26, 2.1, 0.08, 'wallPlaster', { pos: [3.2, uy + 0.64, 1.4] });
+  b.bevelBox(2.2, 0.2, 1.2, 0.07, 'motherDress', { pos: [3.2, uy + 0.74, 2.0] });
+  b.bevelBox(1.5, 2.2, 0.7, 0.03, 'woodMid', { pos: [-4.0, uy + 1.1, -4.0] });
+  b.bevelBox(2.0, 0.04, 1.6, 0.01, 'meadowFlowerC', { pos: [0.0, uy + 0.08, 0.6] });
 
-  const mesh = new Mesh(b.build({ groundY: floorY }), M.built('wood', 1.6));
+  // No groundY here: this mesh IS the floor, so grounding it would darken the
+  // very surface the room is lit through. Furniture still grounds against it.
+  const mesh = new Mesh(b.build({ aoStrength: 0.4 }), M.built('wood', 1.5));
   mesh.name = 'chalet-interior';
   mesh.castShadow = false;
   mesh.receiveShadow = true;

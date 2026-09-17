@@ -1,5 +1,6 @@
 import {
   AdditiveBlending,
+  PointLight,
   BufferAttribute,
   BufferGeometry,
   Color,
@@ -70,6 +71,16 @@ export class WeatherSystem {
   readonly fill: DirectionalLight;
   readonly hemisphere: HemisphereLight;
   readonly ambient: AmbientLight;
+  /**
+   * The one interior light.
+   *
+   * A roofed building blocks the sun and the sky, so an interior lit only by
+   * the outdoor rig is a black box. Rather than pay for a light per room, a
+   * single warm lamp follows the child indoors and fades up as they enter.
+   * It also stays lit after dark so the windows glow from outside.
+   */
+  readonly interior: PointLight;
+  private interiorAmount = 0;
 
   private scene: Scene;
   private fog: Fog;
@@ -115,6 +126,10 @@ export class WeatherSystem {
 
     this.ambient = new AmbientLight(color('horizonDay').getHex(), 0.22);
     scene.add(this.ambient);
+
+    this.interior = new PointLight(color('windowGlassLit').getHex(), 0, 16, 1.6);
+    this.interior.castShadow = false;
+    scene.add(this.interior);
 
     this.fog = new Fog(color('horizonDay').getHex(), 40, 320);
     scene.fog = this.fog;
@@ -248,6 +263,8 @@ export class WeatherSystem {
     this.ambient.color.copy(sky.horizon);
     this.ambient.intensity = 0.16 + nightLift * 0.3;
 
+    this.applyInteriorAmbient();
+
     /* --- fog --- */
     const fogColor = color(profile.fogTint).clone().lerp(sky.horizon, 0.55);
     this.fog.color.copy(fogColor);
@@ -269,6 +286,26 @@ export class WeatherSystem {
   /** 0..1 — used by the world to light the chalet windows at night. */
   get interiorLightAmount(): number {
     return this.windowGlow;
+  }
+
+  /**
+   * Places and fades the interior lamp.
+   * @param position where the lamp should sit (usually the room the child is in)
+   * @param inside   0 outdoors, 1 fully indoors
+   */
+  setInterior(position: Vector3, inside: number, dt: number): void {
+    this.interior.position.lerp(position, 1 - Math.exp(-4 * dt));
+    this.interiorAmount = lerp(this.interiorAmount, clamp01(inside), 1 - Math.exp(-3 * dt));
+    // Brighter after dark, and never fully off so a glance through a window
+    // shows a lit room rather than a black rectangle.
+    const night = 1 - clamp01(this.sun.intensity / 1.4);
+    this.interior.intensity = (0.5 + night * 1.5) * (0.25 + this.interiorAmount * 0.95) * 6;
+  }
+
+  /** Extra ambient while indoors, so shaded corners stay readable. */
+  private applyInteriorAmbient(): void {
+    this.ambient.intensity += this.interiorAmount * 0.22;
+    this.hemisphere.intensity += this.interiorAmount * 0.14;
   }
 
   private buildParticles(): void {

@@ -70,7 +70,13 @@ export type StepKind =
   | 'setFlag'
   | 'animalReact'
   | 'cameraFocus'
-  | 'fadeTo'; // screen fade (used for sleeping / entering the house)
+  | 'fadeTo' // screen fade (used for sleeping / entering the house)
+  /**
+   * Hands off to a physical routine registered by the world: a chain of real
+   * pick-up / carry / place / sit operations rather than a canned animation.
+   * See `HouseInteractions.breakfastSteps`.
+   */
+  | 'routine';
 
 export interface ActivityStep {
   kind: StepKind;

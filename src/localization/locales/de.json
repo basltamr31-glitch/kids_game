@@ -1,7 +1,6 @@
 {
   "app.title": "Kleine Alpentage",
   "boot.loading": "Das Tal wacht auf…",
-
   "common.ok": "OK",
   "common.cancel": "Abbrechen",
   "common.back": "Zurück",
@@ -12,7 +11,6 @@
   "common.done": "Fertig",
   "common.on": "An",
   "common.off": "Aus",
-
   "welcome.title": "Wer bist du heute?",
   "welcome.boy": "Junge",
   "welcome.girl": "Mädchen",
@@ -21,29 +19,24 @@
   "welcome.haircolor": "Haarfarbe",
   "welcome.outfit": "Kleidung",
   "welcome.start": "Los geht's!",
-
   "hud.day": "Tag {day}",
   "hud.tasks": "Das kannst du tun",
   "hud.notasks": "Genieße einfach den Tag!",
   "hud.hearts": "{count} Herzen",
-
   "phase.morning": "Morgen",
   "phase.midday": "Mittag",
   "phase.afternoon": "Nachmittag",
   "phase.evening": "Abend",
   "phase.night": "Nacht",
-
   "weather.sunny": "Sonnig",
   "weather.cloudy": "Bewölkt",
   "weather.rain": "Regnerisch",
   "weather.snow": "Verschneit",
   "weather.fog": "Neblig",
-
   "season.spring": "Frühling",
   "season.summer": "Sommer",
   "season.autumn": "Herbst",
   "season.winter": "Winter",
-
   "activity.wakeup": "Aufstehen",
   "activity.getdressed": "Anziehen",
   "activity.breakfast": "Frühstücken",
@@ -70,7 +63,6 @@
   "activity.indoorplay": "Drinnen spielen",
   "activity.smellflowers": "An den Blumen riechen",
   "activity.visitstream": "Zum Bach gehen",
-
   "prompt.feed": "Füttern",
   "prompt.water": "Gießen",
   "prompt.milk": "Melken",
@@ -85,7 +77,6 @@
   "prompt.sleep": "Schlafen",
   "prompt.look": "Schauen",
   "prompt.play": "Spielen",
-
   "item.hay": "Heu",
   "item.grain": "Körner",
   "item.bucket": "Eimer",
@@ -96,7 +87,6 @@
   "item.tomato": "Tomate",
   "item.wateringcan": "Gießkanne",
   "item.flower": "Blume",
-
   "animal.bella": "Bella",
   "animal.rosie": "Rosi",
   "animal.milo": "Milo",
@@ -105,11 +95,9 @@
   "animal.luna": "Luna",
   "animal.speckle": "Fleckchen",
   "animal.henny": "Henni",
-
   "actor.mother": "Mama",
   "actor.father": "Papa",
   "actor.child": "Du",
-
   "speech.mother.goodmorning.1": "Guten Morgen, Schlafmütze!",
   "speech.mother.goodmorning.2": "Da bist du ja! Das Frühstück ist fertig.",
   "speech.mother.goodmorning.3": "Morgen! Schau nur, wie sonnig es ist.",
@@ -123,7 +111,6 @@
   "speech.mother.dinner.1": "Das Essen ist fertig. Komm, setz dich!",
   "speech.mother.goodnight.1": "Gute Nacht. Schlaf gut, mein Schatz.",
   "speech.mother.rain.1": "Es regnet. Bleiben wir gemütlich drinnen?",
-
   "speech.father.hello.1": "Hallo! Bereit für einen schönen Tag?",
   "speech.father.hello.2": "Guten Morgen! Das Tal sieht herrlich aus.",
   "speech.father.thanks.1": "Tolle Arbeit. Danke dir!",
@@ -132,10 +119,8 @@
   "speech.father.animals.1": "Die Schafe fressen immer zuerst, du wirst sehen.",
   "speech.father.goodnight.1": "Gute Nacht. Bis morgen früh.",
   "speech.father.snow.1": "Schau raus — überall Schnee!",
-
   "speech.child.happy.1": "Juhu!",
   "speech.child.wow.1": "Wow!",
-
   "toast.fed": "{name} ist glücklich!",
   "toast.collected": "Du hast {count} {item} gesammelt",
   "toast.watered": "Die Pflanzen sehen glücklich aus",
@@ -145,18 +130,15 @@
   "toast.carrying": "Du trägst {item}",
   "toast.handsfull": "Deine Hände sind voll",
   "toast.locked": "Dieser Teil des Tals wartet noch auf dich",
-
   "dayend.title": "Heute war ein wunderschöner Tag!",
   "dayend.tasks": "Du hast {count} Mal geholfen",
   "dayend.hearts": "{count} Herzen",
   "dayend.discoveries": "{count} neue Entdeckungen",
   "dayend.next": "Tag {day} beginnen",
   "dayend.goodnight": "Gute Nacht!",
-
   "naturebook.title": "Naturbuch",
   "naturebook.empty": "Erkunde das Tal und finde etwas!",
   "naturebook.found": "{found} von {total} gefunden",
-
   "discovery.butterfly": "Schmetterling",
   "discovery.bluebird": "Blauer Vogel",
   "discovery.mushroom": "Pilz",
@@ -167,19 +149,16 @@
   "discovery.rabbit": "Wildkaninchen",
   "discovery.pinecone": "Tannenzapfen",
   "discovery.rainbow": "Regenbogen",
-
   "sticker.firstday": "Mein erster Tag",
   "sticker.animalfriend": "Tierfreund",
   "sticker.gardener": "Kleiner Gärtner",
   "sticker.explorer": "Entdecker",
   "sticker.helper": "Beste Hilfe",
   "sticker.weekone": "Eine ganze Woche",
-
   "parent.gate.title": "Für Erwachsene",
   "parent.gate.instruction": "Halte die Taste 3 Sekunden lang gedrückt.",
   "parent.gate.hold": "Hier halten",
   "parent.gate.hint": "So bleiben die Einstellungen vor kleinen Fingern sicher.",
-
   "parent.area.title": "Elternbereich",
   "parent.area.sound": "Ton",
   "parent.area.music": "Musik",
@@ -204,7 +183,6 @@
   "parent.area.reset.confirm": "Dadurch geht der gesamte Fortschritt verloren. Sicher?",
   "parent.area.about": "Kleine Alpentage v{version}",
   "parent.area.offline": "Dieses Spiel funktioniert komplett offline und sammelt keine persönlichen Daten.",
-
   "store.title": "Vollversion freischalten",
   "store.body": "Ein Kauf. Kein Abo. Keine Werbung. Für immer alles freigeschaltet.",
   "store.feature.animals": "Pferd, Ziegen, Kaninchen und ein Hofhund",
@@ -221,17 +199,38 @@
   "store.restored": "Dein Kauf wurde wiederhergestellt.",
   "store.norestore": "Es wurde kein früherer Kauf gefunden.",
   "store.offline": "Nur für diesen Kauf wird eine Verbindung benötigt.",
-
   "locked.title": "Teil der Vollversion",
   "locked.body": "Bitte einen Erwachsenen, das ganze Tal freizuschalten.",
   "locked.ask": "Einem Erwachsenen zeigen",
-
   "credits.title": "Mitwirkende",
   "credits.body": "Mit Liebe gemacht für neugierige Kinder und ihre Familien.\nAlle Grafiken, Musik und Geräusche in diesem Spiel sind Originale.",
-
   "a11y.move": "Das Kind bewegen",
   "a11y.camera": "Die Kamera bewegen",
   "a11y.interact": "Interagieren",
   "a11y.menu": "Menü öffnen",
-  "a11y.tasks": "Aufgaben von heute zeigen"
+  "a11y.tasks": "Aufgaben von heute zeigen",
+  "prompt.close": "Schließen",
+  "prompt.sit": "Hinsetzen",
+  "prompt.stand": "Aufstehen",
+  "prompt.place": "Hinstellen",
+  "prompt.wash": "Waschen",
+  "prompt.brush": "Putzen",
+  "prompt.eat": "Essen",
+  "prompt.drink": "Trinken",
+  "prompt.pour": "Eingießen",
+  "interact.takeplate": "Einen Teller nehmen",
+  "interact.takebread": "Brot nehmen",
+  "interact.takemilk": "Die Milch nehmen",
+  "interact.takeglass": "Ein Glas nehmen",
+  "interact.puton": "Hinstellen",
+  "interact.sit": "An den Tisch setzen",
+  "interact.standup": "Aufstehen",
+  "interact.eat": "Frühstück essen",
+  "interact.drink": "Milch trinken",
+  "interact.pour": "Milch eingießen",
+  "interact.wash": "Hände waschen",
+  "interact.brush": "Zähne putzen",
+  "interact.sleep": "Schau dein Bett an",
+  "interact.getdressed": "Schrank öffnen",
+  "interact.play": "Mit dem Teddy spielen"
 }

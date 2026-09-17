@@ -7,6 +7,7 @@ import { PartBuilder } from '../art/MeshKit';
 import { SKIN_TONES, HAIR_COLORS, OUTFIT_PRIMARY, OUTFIT_SECONDARY } from '../art/Palette';
 import type { CharacterAppearance } from '../save/SaveSchema';
 import { LAYOUT } from '../world/WorldBuilder';
+import type { Seat } from './interact/Interactable';
 
 /**
  * The child.
@@ -33,6 +34,18 @@ const HOUSE_HALF_X = 7.2;
 const HOUSE_HALF_Z = 5.7;
 const DOOR_HALF_WIDTH = 1.5;
 
+/**
+ * Waypoints either side of the front door.
+ *
+ * The house has solid walls and the game has no navmesh, so a child told to
+ * walk to the kitchen from the farmyard would slide along the outside wall and
+ * stop. Routing through these two points is all the navigation this world
+ * actually needs: there is exactly one building you can enter, with exactly one
+ * door, and everything else is open ground.
+ */
+const DOOR_OUTSIDE = new Vector3(LAYOUT.house.x, 0, LAYOUT.house.z + HOUSE_HALF_Z + 1.4);
+const DOOR_INSIDE = new Vector3(LAYOUT.house.x, 0, LAYOUT.house.z + HOUSE_HALF_Z - 1.5);
+
 export class Player {
   readonly group = new Group();
   readonly rig: CharacterRig;
@@ -48,6 +61,12 @@ export class Player {
   private facing = 0;
   private terrain: Terrain;
   private scripted = false;
+
+  /** True while a prop is in the hand, so idle holds the carry pose. */
+  private carrying = false;
+  /** Seat the child is currently on, or null when standing. */
+  private seat: Seat | null = null;
+  private seatBlend = 0;
 
   /** Set by the interaction system when a walk is part of an activity. */
   onArrive: (() => void) | null = null;
@@ -81,14 +100,36 @@ export class Player {
     return lookFromAppearance(appearance);
   }
 
+  /**
+   * Walks to a point, routing through the front door when that crossing is
+   * required. The remaining waypoints are queued and consumed on arrival.
+   */
   walkTo(point: Vector3): void {
-    const clamped = this.findWalkablePoint(point);
-    this.moveTarget = clamped;
+    const destination = this.findWalkablePoint(point);
+    this.path = this.routeTo(destination);
+    this.moveTarget = this.path.shift() ?? destination;
+  }
+
+  /**
+   * Builds the waypoint list. Returns the destination alone when start and end
+   * are on the same side of the front wall.
+   */
+  private routeTo(destination: Vector3): Vector3[] {
+    const fromInside = this.isInsideHouse(this.position.x, this.position.z);
+    const toInside = this.isInsideHouse(destination.x, destination.z);
+    if (fromInside === toInside) return [destination];
+
+    const a = fromInside ? DOOR_INSIDE : DOOR_OUTSIDE;
+    const b = fromInside ? DOOR_OUTSIDE : DOOR_INSIDE;
+    return [a.clone(), b.clone(), destination];
   }
 
   stop(): void {
     this.moveTarget = null;
+    this.path.length = 0;
   }
+
+  private path: Vector3[] = [];
 
   /** Freezes player-driven movement while a scripted activity plays. */
   setScripted(scripted: boolean): void {
@@ -102,6 +143,52 @@ export class Player {
     if (dx * dx + dz * dz < 1e-4) return;
     this.facing = Math.atan2(dx, dz);
   }
+
+  /** True while a prop is in hand. Changes the idle and walk poses. */
+  setCarrying(carrying: boolean): void {
+    this.carrying = carrying;
+  }
+
+  get isCarrying(): boolean {
+    return this.carrying;
+  }
+
+  get isSeated(): boolean {
+    return this.seat !== null;
+  }
+
+  /**
+   * Sits the child on a seat.
+   *
+   * The body is moved to the seat's world transform rather than parented to it,
+   * so the walk-away is a normal walk from wherever the chair happens to be,
+   * and a chair that never moves does not need to own the character.
+   */
+  sitOn(seat: Seat): void {
+    this.seat = seat;
+    this.seatBlend = 0;
+    seat.node.updateWorldMatrix(true, false);
+    const world = seat.offset.clone().applyMatrix4(seat.node.matrixWorld);
+    this.position.x = world.x;
+    this.position.z = world.z;
+    this.seatHeight = world.y;
+    this.facing = seat.yaw;
+    this.moveTarget = null;
+    this.scripted = true;
+    this.rig.play('sitDown', true);
+  }
+
+  standUp(): void {
+    if (!this.seat) return;
+    this.seat = null;
+    this.rig.play('standUp', true);
+    // Step clear of the chair so the child is not standing inside it.
+    const away = new Vector3(Math.sin(this.facing), 0, Math.cos(this.facing)).multiplyScalar(0.55);
+    this.position.x += away.x;
+    this.position.z += away.z;
+  }
+
+  private seatHeight = 0;
 
   playClip(clip: ClipName): void {
     this.rig.play(clip, true);
@@ -135,17 +222,30 @@ export class Player {
       this.speed = damp(this.speed, 0, 12, dt);
     }
 
-    // Stick to the ground, smoothed so slopes do not jitter the camera.
+    // Height comes from the seat while sitting and from the terrain otherwise.
+    // Blending between them means sitting down and standing up both settle
+    // rather than snapping the character to a new height.
     const groundY = this.terrain.heightAt(this.position.x, this.position.z);
-    this.position.y = damp(this.position.y, groundY, 16, dt);
+    if (this.seat) {
+      this.seatBlend = Math.min(1, this.seatBlend + dt * 3);
+      this.position.y = damp(this.position.y, this.seatHeight, 8, dt);
+    } else {
+      this.seatBlend = Math.max(0, this.seatBlend - dt * 3);
+      this.position.y = damp(this.position.y, groundY, 16, dt);
+    }
     this.group.position.copy(this.position);
     this.group.rotation.y = dampAngle(this.group.rotation.y, this.facing, 11, dt);
 
-    // Choose the clip unless a scripted activity has taken control.
-    if (!this.scripted) {
+    // Choose the clip unless a scripted sequence has taken control.
+    if (this.seat) {
+      // sitDown is a one-shot; hold the seated idle once it has played out.
+      if (this.rig.currentClip === 'sitDown' && this.rig.clipProgress >= 1) {
+        this.rig.play('sitIdle');
+      }
+    } else if (!this.scripted) {
       if (this.speed > 2.6) this.rig.play('run');
       else if (this.speed > 0.15) this.rig.play('walk');
-      else if (this.carriedItemId) this.rig.play('carry');
+      else if (this.carrying || this.carriedItemId) this.rig.play('carry');
       else this.rig.play('idle');
     }
 
@@ -159,6 +259,13 @@ export class Player {
     const distance = Math.hypot(dx, dz);
 
     if (distance < 0.28) {
+      // More waypoints to go: take the next one without stopping or firing
+      // the arrival callback, so a route through the door reads as one walk.
+      const next = this.path.shift();
+      if (next) {
+        this.moveTarget = next;
+        return;
+      }
       this.moveTarget = null;
       this.speed = damp(this.speed, 0, 14, dt);
       const callback = this.onArrive;

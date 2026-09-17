@@ -9,33 +9,51 @@ import type { AnimalAgent } from '../animals/AnimalAgent';
 import type { FamilyAgent } from '../characters/FamilyAgent';
 import type { ActivityDefinition } from '../content/Types';
 import type { TapEvent } from './InputManager';
+import type { InteractionRunner } from './interact/InteractionRunner';
+import {
+  VERB_ICON,
+  VERB_KEY,
+  type Interactable,
+  type InteractVerb,
+  type InteractableRegistry,
+} from './interact/Interactable';
 
 /**
  * Turns taps into intentions.
  *
- * A tap resolves, in priority order, to:
- *   1. The activity prompt currently floating over something nearby.
- *   2. An animal or parent -> a friendly greeting (always available, always
- *      free, no task needed — children pet the cow because they want to).
- *   3. A point on the ground -> walk there.
+ * Two sources of things to do, in priority order:
  *
- * The floating prompt is the game's entire tutorial: walk near a thing, a big
- * icon appears over it, tap it. Nothing is ever explained in words.
+ *   1. PHYSICAL INTERACTABLES - the plate on the counter, the chair, the door.
+ *      These are the primary way the child acts on the world, and they always
+ *      win when one is in reach, because they are what the player is looking
+ *      at.
+ *   2. SCHEDULED ACTIVITIES   - today's chores. These are the guided path: one
+ *      tap plays a whole chain of the same physical operations.
+ *
+ * A tap that hits neither walks the child to the tapped point.
+ *
+ * There is no menu anywhere in this file, and that is deliberate.
  */
 
 export interface WorldPrompt {
-  activity: ActivityDefinition;
   /** World position for the bubble. */
   position: Vector3;
-  /** Distance from the child, for sorting. */
+  bubbleHeight: number;
+  icon: string;
+  /** Localization key for the label under the bubble. */
+  labelKey: string;
   distance: number;
+  source: 'interactable' | 'activity';
+  interactable?: Interactable;
+  activity?: ActivityDefinition;
 }
 
 const GROUND_PLANE = new Plane(new Vector3(0, 1, 0), 0);
-const PROMPT_RADIUS = 5.0;
+/** How far the child can be from an object and still be offered it. */
+const INTERACT_RADIUS = 2.6;
+const ACTIVITY_RADIUS = 5.0;
 
 export class InteractionSystem {
-  /** The prompt currently offered, or null. Read by the HUD each frame. */
   activePrompt: WorldPrompt | null = null;
 
   private ctx: GameContext;
@@ -46,10 +64,13 @@ export class InteractionSystem {
   private world: BuiltWorld;
   private animals: Map<string, AnimalAgent>;
   private parents: Map<string, FamilyAgent>;
+  private registry: InteractableRegistry;
+  private runner: InteractionRunner;
 
   private raycaster = new Raycaster();
   private pickables: Object3D[] = [];
   private lastOfferedId: string | null = null;
+  private facing = new Vector3(0, 0, 1);
 
   constructor(
     ctx: GameContext,
@@ -61,6 +82,8 @@ export class InteractionSystem {
       world: BuiltWorld;
       animals: Map<string, AnimalAgent>;
       parents: Map<string, FamilyAgent>;
+      registry: InteractableRegistry;
+      runner: InteractionRunner;
     },
   ) {
     this.ctx = ctx;
@@ -71,11 +94,12 @@ export class InteractionSystem {
     this.world = refs.world;
     this.animals = refs.animals;
     this.parents = refs.parents;
+    this.registry = refs.registry;
+    this.runner = refs.runner;
 
     this.refreshPickables();
   }
 
-  /** Rebuilt whenever an animal or parent is added or removed. */
   refreshPickables(): void {
     this.pickables = [
       ...[...this.animals.values()].map((a) => a.object),
@@ -83,18 +107,108 @@ export class InteractionSystem {
     ];
   }
 
-  handleTap(tap: TapEvent): void {
-    if (this.activities.isRunning) return;
+  get isBusy(): boolean {
+    return this.activities.isRunning || this.runner.isRunning;
+  }
 
-    // 1. The offered activity wins — it is what the big bubble is pointing at.
+  /* ------------------------------------------------------------------ */
+  /* Per-frame                                                           */
+  /* ------------------------------------------------------------------ */
+
+  update(): void {
+    if (this.isBusy) {
+      this.activePrompt = null;
+      return;
+    }
+
+    const position = this.player.position;
+    this.facing.set(
+      Math.sin(this.player.group.rotation.y),
+      0,
+      Math.cos(this.player.group.rotation.y),
+    );
+
+    /* --- 1. physical interactables --- */
+    const hit = this.registry.findNearest(position, this.facing, INTERACT_RADIUS);
+    if (hit) {
+      const world = hit.interactable.node.getWorldPosition(new Vector3());
+      this.activePrompt = {
+        position: world,
+        bubbleHeight: hit.interactable.bubbleHeight,
+        icon: VERB_ICON[hit.verb],
+        labelKey: hit.interactable.labelKey?.() ?? VERB_KEY[hit.verb],
+        distance: hit.distance,
+        source: 'interactable',
+        interactable: hit.interactable,
+      };
+      this.announce(hit.interactable.id);
+      return;
+    }
+
+    /* --- 2. today's activities --- */
+    const completed = this.ctx.save.save.completedToday;
+    let best: WorldPrompt | null = null;
+
+    for (const activity of this.director.remainingToday) {
+      const point = this.anchorPosition(activity.anchor);
+      if (!point) continue;
+      const distance = position.distanceTo(point);
+      if (distance > ACTIVITY_RADIUS) continue;
+      if (this.activities.blockedReason(activity, completed)) continue;
+      if (!best || distance < best.distance) {
+        best = {
+          position: point.clone(),
+          bubbleHeight: this.promptHeight(activity.anchor),
+          icon: activity.icon,
+          labelKey: activity.titleKey,
+          distance,
+          source: 'activity',
+          activity,
+        };
+      }
+    }
+
+    this.activePrompt = best;
+    this.announce(best?.activity?.id ?? null);
+  }
+
+  private announce(id: string | null): void {
+    if (id && id !== this.lastOfferedId) {
+      this.lastOfferedId = id;
+      this.ctx.bus.emit('activity:offered', { activityId: id });
+    } else if (!id) {
+      this.lastOfferedId = null;
+    }
+  }
+
+  /* ------------------------------------------------------------------ */
+  /* Tap handling                                                        */
+  /* ------------------------------------------------------------------ */
+
+  handleTap(tap: TapEvent): void {
+    if (this.isBusy) return;
+
+    // 1. The floating bubble. Generous hit area — small fingers miss.
     if (this.activePrompt && this.isTapNearPrompt(tap)) {
-      this.tryStart(this.activePrompt.activity);
+      this.runPrompt(this.activePrompt);
       return;
     }
 
     this.raycaster.setFromCamera(tap.ndc, this.cameraRig.camera);
 
-    // 2. A character. Greeting is never gated on anything.
+    // 2. Tapping an interactable directly, even from across the room: the
+    //    child walks over and does it. This is how a four-year-old expects a
+    //    touchscreen to work.
+    const interactHits = this.raycaster.intersectObjects(this.registry.pickables, true);
+    if (interactHits.length > 0) {
+      const found = this.findInteractable(interactHits[0].object);
+      if (found && found.verb()) {
+        this.run(found);
+        return;
+      }
+    }
+
+    // 3. A character. Greeting is never gated on anything.
     const hits = this.raycaster.intersectObjects(this.pickables, true);
     if (hits.length > 0) {
       const root = findTaggedRoot(hits[0].object);
@@ -104,9 +218,10 @@ export class InteractionSystem {
       }
     }
 
-    // 3. Ground. Project the ray onto the plane, then snap to the terrain.
+    // 4. Ground: walk there.
     const point = new Vector3();
     if (this.raycaster.ray.intersectPlane(GROUND_PLANE, point)) {
+      if (this.player.isSeated) this.runner.forceStand();
       const destination = this.player.findWalkablePoint(point);
       this.player.walkTo(destination);
       this.ctx.audio.play('tap', 0.9);
@@ -114,79 +229,25 @@ export class InteractionSystem {
     }
   }
 
-  /** Called every frame; decides which prompt to float. */
-  update(): void {
-    if (this.activities.isRunning) {
-      this.activePrompt = null;
-      return;
-    }
-
-    const childPosition = this.player.position;
-    const completed = this.ctx.save.save.completedToday;
-    let best: WorldPrompt | null = null;
-
-    for (const activity of this.director.remainingToday) {
-      const position = this.anchorPosition(activity.anchor);
-      if (!position) continue;
-
-      const distance = childPosition.distanceTo(position);
-      if (distance > PROMPT_RADIUS) continue;
-      if (this.activities.blockedReason(activity, completed)) continue;
-
-      if (!best || distance < best.distance) {
-        best = { activity, position, distance };
-      }
-    }
-
-    // Also offer the *next* task's anchor at a wider radius so a child heading
-    // in roughly the right direction still gets a hint.
-    if (!best) {
-      const next = this.director.remainingToday[0];
-      if (next) {
-        const position = this.anchorPosition(next.anchor);
-        if (position && childPosition.distanceTo(position) < PROMPT_RADIUS * 1.6) {
-          if (!this.activities.blockedReason(next, completed)) {
-            best = { activity: next, position, distance: childPosition.distanceTo(position) };
-          }
-        }
-      }
-    }
-
-    this.activePrompt = best;
-
-    if (best && best.activity.id !== this.lastOfferedId) {
-      this.lastOfferedId = best.activity.id;
-      this.ctx.bus.emit('activity:offered', { activityId: best.activity.id });
-    } else if (!best) {
-      this.lastOfferedId = null;
+  private runPrompt(prompt: WorldPrompt): void {
+    if (prompt.source === 'interactable' && prompt.interactable) {
+      this.run(prompt.interactable);
+    } else if (prompt.activity) {
+      this.tryStart(prompt.activity);
     }
   }
 
-  /** Where an activity's anchor currently is (animals and people move). */
-  anchorPosition(anchorId: string): Vector3 | null {
-    // The child is an anchor too: activity emotes float above their own head.
-    if (anchorId === 'child') return this.player.position;
-
-    const animal = this.animals.get(anchorId);
-    if (animal) return animal.position;
-
-    const parent = this.parents.get(anchorId);
-    if (parent) return parent.position;
-
-    const anchor = this.world.anchors.get(anchorId);
-    return anchor ? anchor.position : null;
+  /** Plays an interactable's physical sequence. */
+  run(interactable: Interactable): void {
+    const verb = interactable.verb();
+    if (!verb) return;
+    this.ctx.audio.play('confirm');
+    this.ctx.platform.haptic('medium');
+    this.activePrompt = null;
+    this.runner.play(interactable.run());
   }
 
-  /** Bubble height for the current prompt. */
-  promptHeight(anchorId: string): number {
-    const animal = this.animals.get(anchorId);
-    if (animal) return animal.definition.kind === 'cow' ? 2.2 : 1.3;
-    const parent = this.parents.get(anchorId);
-    if (parent) return parent.rig.height * 1.05;
-    return this.world.anchors.get(anchorId)?.bubbleHeight ?? 1.7;
-  }
-
-  /** Starts an activity from the HUD task list or the world bubble. */
+  /** Starts a scheduled activity. */
   tryStart(activity: ActivityDefinition): boolean {
     const blocked = this.activities.blockedReason(activity, this.ctx.save.save.completedToday);
     if (blocked) {
@@ -195,18 +256,65 @@ export class InteractionSystem {
       this.ctx.bus.emit('ui:toast', { textKey: blocked, icon: '🙂' });
       return false;
     }
-
     this.ctx.audio.play('confirm');
     this.ctx.platform.haptic('medium');
     this.activePrompt = null;
+    if (this.player.isSeated) this.runner.forceStand();
     return this.activities.start(activity.id);
   }
 
+  /* ------------------------------------------------------------------ */
+  /* Lookups                                                             */
+  /* ------------------------------------------------------------------ */
+
+  /** Where an activity's anchor currently is. Animals and people move. */
+  anchorPosition(anchorId: string): Vector3 | null {
+    if (anchorId === 'child') return this.player.position;
+
+    const animal = this.animals.get(anchorId);
+    if (animal) return animal.position;
+
+    const parent = this.parents.get(anchorId);
+    if (parent) return parent.position;
+
+    const interactable = this.registry.get(anchorId);
+    if (interactable) return interactable.node.getWorldPosition(new Vector3());
+
+    const anchor = this.world.anchors.get(anchorId);
+    return anchor ? anchor.position : null;
+  }
+
+  promptHeight(anchorId: string): number {
+    const animal = this.animals.get(anchorId);
+    if (animal) return animal.definition.kind === 'cow' ? 2.2 : 1.3;
+    const parent = this.parents.get(anchorId);
+    if (parent) return parent.rig.height * 1.05;
+    const interactable = this.registry.get(anchorId);
+    if (interactable) return interactable.bubbleHeight;
+    return this.world.anchors.get(anchorId)?.bubbleHeight ?? 1.7;
+  }
+
+  private findInteractable(object: Object3D): Interactable | null {
+    let node: Object3D | null = object;
+    while (node) {
+      for (const item of this.registry.all) {
+        if (item.node === node) return item;
+      }
+      node = node.parent;
+    }
+    return null;
+  }
+
+  /* ------------------------------------------------------------------ */
+  /* Greetings                                                           */
+  /* ------------------------------------------------------------------ */
+
   private greet(target: { kind: 'animal' | 'parent'; id: string }): void {
+    if (this.player.isSeated) this.runner.forceStand();
+
     if (target.kind === 'animal') {
       const animal = this.animals.get(target.id);
       if (!animal) return;
-      // Walk over, then react — tapping a distant cow should not teleport a moo.
       const distance = this.player.position.distanceTo(animal.position);
       if (distance > 2.6) {
         const approach = new Vector3()
@@ -245,16 +353,16 @@ export class InteractionSystem {
 
     this.player.faceToward(animal.position);
     this.player.playClip('crouchPet');
-    this.player.setExpression('happy');
+    this.player.setExpression('laugh');
     animal.react('happy');
 
     this.ctx.audio.playAnimal(animal.definition.voice.kind, animal.definition.voice.base);
-    this.ctx.audio.playVoice('happy', false);
+    this.ctx.audio.playVoice('laugh', false);
     this.ctx.platform.haptic('light');
     this.ctx.bus.emit('emote', { actor: animal.id, emote: '💗' });
 
-    // Petting an animal for the first time each day is worth a heart. This is
-    // the one reward in the game that exists purely for affection.
+    // The first pet of the day is worth a heart. This is the one reward in the
+    // game that exists purely for affection.
     if (!animal.state.petToday) {
       animal.state.petToday = true;
       this.ctx.save.update((data) => {
@@ -272,21 +380,19 @@ export class InteractionSystem {
 
   private isTapNearPrompt(tap: TapEvent): boolean {
     if (!this.activePrompt) return false;
-    // Project the bubble to screen space and accept a generous radius. Small
-    // fingers miss; a 90px target is the minimum that feels fair.
     const world = this.activePrompt.position.clone();
-    world.y += this.promptHeight(this.activePrompt.activity.anchor);
+    world.y += this.activePrompt.bubbleHeight;
     world.project(this.cameraRig.camera);
-
     const screen = new Vector2(world.x, world.y);
     return screen.distanceTo(tap.ndc) < 0.22;
   }
+
+  /** Exposed so the HUD can offer the same verbs in its task list. */
+  get verbIcon(): typeof VERB_ICON {
+    return VERB_ICON;
+  }
 }
 
-/**
- * Walks up from a raycast hit to the object we tagged with an interaction id.
- * Meshes deep inside a rig do not know what they belong to.
- */
 function findTaggedRoot(object: Object3D): { kind: 'animal' | 'parent'; id: string } | null {
   let node: Object3D | null = object;
   while (node) {
@@ -298,3 +404,5 @@ function findTaggedRoot(object: Object3D): { kind: 'animal' | 'parent'; id: stri
   }
   return null;
 }
+
+export type { InteractVerb };

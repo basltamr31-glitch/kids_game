@@ -23,6 +23,9 @@ import { ActivitySystem } from '../gameplay/ActivitySystem';
 import { InteractionSystem } from '../gameplay/InteractionSystem';
 import { DayDirector } from '../gameplay/DayDirector';
 import { WeatherSystem } from '../gameplay/WeatherSystem';
+import { InteractableRegistry } from '../gameplay/interact/Interactable';
+import { InteractionRunner } from '../gameplay/interact/InteractionRunner';
+import { buildHouseInteractions, type HouseState } from '../world/HouseInteractions';
 import { AnimalAgent } from '../animals/AnimalAgent';
 import { FamilyAgent } from '../characters/FamilyAgent';
 
@@ -65,6 +68,9 @@ export class Game {
   private interaction!: InteractionSystem;
   private director!: DayDirector;
   private weather!: WeatherSystem;
+  private registry = new InteractableRegistry();
+  private runner!: InteractionRunner;
+  private house!: HouseState;
   private ui!: UIRoot;
   private hud!: Hud;
   private layout: ResponsiveLayout;
@@ -80,6 +86,7 @@ export class Game {
   private windTime = 0;
   private dayEnding = false;
   private discoveryTargets: { id: string; position: Vector3; found: boolean }[] = [];
+  private interiorLightTarget = new Vector3();
 
   constructor(ctx: GameContext, canvas: HTMLCanvasElement) {
     this.ctx = ctx;
@@ -177,6 +184,22 @@ export class Game {
       this.actorRoot.add(agent.group);
     }
 
+    /* --- physical interaction --- */
+    // The runner owns what the child is holding and whether they are sitting,
+    // and the house asks it those questions when deciding what each object
+    // offers. That is the whole coupling between them.
+    this.runner = new InteractionRunner(ctx, this.player);
+    this.house = buildHouseInteractions(
+      this.registry,
+      () => this.runner.carriedProp,
+      () => this.player.isSeated,
+    );
+    const chalet = this.world.cutaways[0];
+    if (chalet) {
+      this.house.group.position.copy(chalet.centre);
+      this.scene.add(this.house.group);
+    }
+
     /* --- systems --- */
     this.director = new DayDirector(ctx);
     this.activities = new ActivitySystem(ctx, {
@@ -186,6 +209,12 @@ export class Game {
       world: this.world,
       camera: this.cameraRig,
     });
+    // Physical routines the scheduled activities hand off to.
+    this.activities.attachRunner(this.runner, {
+      breakfast: () => this.house.breakfastSteps(),
+      bedtime: () => this.house.bedtimeSteps(),
+    });
+
     this.interaction = new InteractionSystem(ctx, {
       player: this.player,
       cameraRig: this.cameraRig,
@@ -194,6 +223,8 @@ export class Game {
       world: this.world,
       animals: this.animals,
       parents: this.parents,
+      registry: this.registry,
+      runner: this.runner,
     });
 
     /* --- UI --- */
@@ -480,6 +511,7 @@ export class Game {
     this.actorRoot.add(this.player.group);
 
     // Systems hold a reference to the player; rebuild the ones that do.
+    this.runner = new InteractionRunner(this.ctx, this.player);
     this.activities = new ActivitySystem(this.ctx, {
       player: this.player,
       animals: this.animals,
@@ -495,6 +527,8 @@ export class Game {
       world: this.world,
       animals: this.animals,
       parents: this.parents,
+      registry: this.registry,
+      runner: this.runner,
     });
   }
 
@@ -705,6 +739,8 @@ export class Game {
     this.input.endFrame();
 
     /* --- simulation --- */
+    this.registry.update(dt);
+    this.runner.update(dt);
     this.activities.update(dt);
     this.player.update(dt);
 
@@ -736,7 +772,20 @@ export class Game {
     // The cutaway follows the camera as well as the child: walking along an
     // outside wall can put the camera indoors, and a screen full of roof
     // underside is both ugly and disorienting.
-    updateCutaways(this.world, this.player.position, this.cameraRig.camera.position, dt);
+    const inside = updateCutaways(
+      this.world,
+      this.player.position,
+      this.cameraRig.camera.position,
+      dt,
+    );
+    // The interior lamp sits a little above the child's head, in the room they
+    // are actually standing in.
+    this.interiorLightTarget.set(
+      this.player.position.x,
+      this.player.position.y + 2.0,
+      this.player.position.z,
+    );
+    this.weather.setInterior(this.interiorLightTarget, inside ? 1 : 0, dt);
 
     // Stream ambience by proximity.
     const distanceToStream = Math.abs(this.player.position.z - 68);
