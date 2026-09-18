@@ -105,6 +105,28 @@ export class Terrain {
     nor.needsUpdate = true;
   }
 
+  /**
+   * How lush the meadow is here, 0 (worn and dry) .. 1 (deep and green).
+   *
+   * Exported because the grass has to agree with it. A meadow that is evenly
+   * green everywhere and evenly tufted everywhere reads as a billiard table
+   * with objects standing on it; what makes it read as ground is that the
+   * colour and the density vary TOGETHER, thinning out over the same patches.
+   *
+   * Two octaves at deliberately different scales: a broad one at roughly forty
+   * metres, which is the scale the player actually perceives as "over there it
+   * is greener", and a finer one for patchiness within that.
+   */
+  lushness(x: number, z: number): number {
+    const broad = fbm2D(x * 0.024, z * 0.024, 2, this.seed + 91) * 0.5 + 0.5;
+    const fine = fbm2D(x * 0.085, z * 0.085, 2, this.seed + 5) * 0.5 + 0.5;
+    const raw = broad * 0.72 + fine * 0.28;
+    // Stretched about the midpoint. Summed noise piles up around 0.5, so
+    // without this the field almost never reaches either end and the patches
+    // it is supposed to produce stay invisible.
+    return clamp01((raw - 0.5) * 2.1 + 0.5);
+  }
+
   normalAt(x: number, z: number, out = new Vector3()): Vector3 {
     const e = 0.6;
     const hL = this.sampleHeight(x - e, z);
@@ -170,6 +192,7 @@ export class Terrain {
     const rock = color('rock');
     const dirt = color('path');
     const sand = color('waterFoam');
+    const dry = color('grassDry');
     const haze = color('valleyHaze');
 
     const tmp = new Color();
@@ -179,10 +202,20 @@ export class Terrain {
       const z = pos.getZ(i);
       const y = pos.getY(i);
 
-      // Break up the green with large, soft noise so the meadow is never flat.
-      const variation = clamp01(fbm2D(x * 0.03, z * 0.03, 2, this.seed + 91) * 0.5 + 0.5);
-      tmp.copy(mid).lerp(light, variation);
-      tmp.lerp(deep, clamp01(fbm2D(x * 0.08, z * 0.08, 2, this.seed + 5) * 0.4 + 0.3) * 0.5);
+      // Break up the green. The previous version varied between three greens
+      // that sit within a few percent of each other in value, which at a
+      // distance is no variation at all. This runs the full range from worn
+      // straw through to deep shade, which is what a real meadow does.
+      const lush = this.lushness(x, z);
+      if (lush < 0.5) {
+        // Drier, more worn ground.
+        tmp.copy(dry).lerp(mid, lush * 2);
+      } else {
+        tmp.copy(mid).lerp(light, (lush - 0.5) * 1.3);
+      }
+      // Shaded hollows, keyed off a different octave so it does not simply
+      // track the same patches.
+      tmp.lerp(deep, clamp01(fbm2D(x * 0.055, z * 0.055, 2, this.seed + 37) * 0.5 + 0.5) * 0.42);
 
       // Rock appears on the steep valley walls.
       const slope = clamp01(1 - this.normalAt(x, z).y);

@@ -354,6 +354,16 @@ export function buildGrassRings(
       if (!accept(x, z)) continue;
       if (terrain.slopeAt(x, z) > 0.45) continue;
 
+      // Clump with the ground. Uniformly scattered tufts read as a texture
+      // applied to a plane; grass that thickens where the ground is green and
+      // thins where it is worn reads as grass growing out of it. Rejecting
+      // against lushness is what ties the two together.
+      const lush = terrain.lushness(x, z);
+      // Thins over worn ground without thinning the meadow as a whole: the
+      // average acceptance here is close to one, so this redistributes the
+      // tufts rather than removing them.
+      if (rng.next() > 0.55 + lush * 0.75) continue;
+
       _pos.set(x, terrain.heightAt(x, z) - 0.04, z);
       _euler.set(0, rng.range(0, Math.PI * 2), 0);
       _quat.setFromEuler(_euler);
@@ -368,7 +378,9 @@ export function buildGrassRings(
       // dry straw at all, so the field reads as one meadow rather than as
       // scattered pale stalks.
       _color.copy(light).lerp(deep, 0.25 + rng.next() * 0.65);
-      if (rng.next() < 0.22) _color.lerp(dry, rng.next() * 0.35);
+      // Dry ground grows dry grass. Tying the tint to the same field is most
+      // of why the patches read as patches rather than as noise.
+      _color.lerp(dry, clamp01(1 - lush) * 0.55 * (0.4 + rng.next() * 0.6));
       if (season === 'winter') _color.lerp(snow, 0.55 + rng.next() * 0.3);
       mesh.setColorAt(placed, _color);
       placed++;
