@@ -132,6 +132,19 @@ export class CharacterRig {
   private blend = 1;
   private phase = 0;
   private scaleFactor: number;
+
+  /**
+   * Ground distance covered by one full stride cycle, in metres.
+   *
+   * Cadence is derived from this and the current speed so the stance foot
+   * stays put on the ground. Driving cadence off speed with an arbitrary
+   * constant instead — which is what this did — means the feet travel at one
+   * rate and the character at another, and the difference is skating. It was
+   * running at roughly half the step rate the legs needed, so every step slid
+   * about its own length.
+   */
+  private strideLength: number;
+
   private faceMesh: Mesh;
 
   /** Additive look-at, in radians relative to the chest. */
@@ -155,6 +168,10 @@ export class CharacterRig {
   constructor(look: CharacterLook) {
     const s = look.adult ? 1.0 : 0.76;
     this.scaleFactor = s;
+    // Hip to ankle, from the joint offsets below, times the two-step reach of
+    // the swing amplitude used by the walk clip.
+    const legLength = (0.34 + 0.32) * s;
+    this.strideLength = 4 * legLength * Math.sin(WALK_SWING);
 
     const faceStyle: FaceStyle = {
       skin: look.skin,
@@ -332,8 +349,11 @@ export class CharacterRig {
     this.blend = Math.min(1, this.blend + dt / 0.22);
     this.face.update(dt);
 
-    // Stride frequency scales with speed so walking never looks like skating.
-    const cadence = speed > 0.05 ? 2.0 + speed * 1.75 : 1.05;
+    // Cadence is locked to distance travelled, so one stride cycle carries the
+    // character exactly one stride length and the planted foot does not slide.
+    const cadence = speed > 0.05
+      ? Math.min(22, (Math.PI * 2 * speed) / this.strideLength)
+      : 1.05;
     this.phase += dt * cadence;
 
     const pose = this.scratchA;
@@ -503,6 +523,10 @@ function blendPose(target: Pose, other: Pose, amount: number): void {
 /* ------------------------------------------------------------------ */
 
 const sin = Math.sin;
+
+
+/** Thigh swing amplitude of the walk cycle, in radians. Stride length follows. */
+const WALK_SWING = 0.6;
 const cos = Math.cos;
 
 /** Eased 0..1 ramp for one-shot clips. */
@@ -579,7 +603,7 @@ function applyClip(p: Pose, clip: ClipName, t: number, phase: number, speed: num
     case 'run': {
       const running = clip === 'run';
       const amp = running ? 1.45 : 1.0;
-      const swing = sin(phase) * 0.6 * amp;
+      const swing = sin(phase) * WALK_SWING * amp;
 
       p.thighLPitch = swing;
       p.thighRPitch = -swing;
