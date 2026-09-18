@@ -4,6 +4,7 @@ import type { GameContext } from '../core/GameContext';
 import type { InteractionSystem } from '../gameplay/InteractionSystem';
 import type { DayDirector } from '../gameplay/DayDirector';
 import type { CameraRig } from '../gameplay/CameraRig';
+import { rankSuggestions, suggestionHeading, type SuggestionContext } from '../gameplay/Suggestions';
 
 import type { Weather } from '../save/SaveSchema';
 
@@ -42,6 +43,7 @@ export class Hud {
   private heartsChip: HTMLElement;
   private heartsValue: HTMLElement;
   private taskList: HTMLElement;
+  private suggestionContext: () => SuggestionContext;
   private taskTitle: HTMLElement;
   private promptNode: HTMLElement;
   private promptIcon: HTMLElement;
@@ -58,13 +60,20 @@ export class Hud {
 
   constructor(
     ctx: GameContext,
-    refs: { director: DayDirector; interaction: InteractionSystem; camera: CameraRig },
+    refs: {
+      director: DayDirector;
+      interaction: InteractionSystem;
+      camera: CameraRig;
+      /** Builds the "what shall we do?" context. Supplied by the game. */
+      suggestionContext: () => SuggestionContext;
+    },
     handlers: { onMenu: () => void; onBook: () => void },
   ) {
     this.ctx = ctx;
     this.director = refs.director;
     this.interaction = refs.interaction;
     this.camera = refs.camera;
+    this.suggestionContext = refs.suggestionContext;
 
     this.weatherIcon = el('span', { class: 'daychip__weather', text: '☀️' });
     this.dayChip = el('div', { class: 'daychip' }, [
@@ -141,7 +150,7 @@ export class Hud {
     bus.on('day:phase-changed', () => this.refreshTasks());
     bus.on('weather:changed', () => this.refreshDayChip());
     bus.on('locale:changed', () => {
-      this.taskTitle.textContent = this.ctx.loc.t('hud.tasks');
+      // The heading is rewritten contextually by refreshTasks below.
       this.refreshDayChip();
       this.refreshTasks();
     });
@@ -189,7 +198,14 @@ export class Hud {
     this.taskList.appendChild(this.taskTitle);
     this.refreshDayChip();
 
-    const remaining = this.director.remainingToday;
+    // The heading asks rather than instructs, and the order reflects the moment
+    // the child is standing in: the weather, where they are, and whether the
+    // animals need anything. The activities themselves are unchanged, so every
+    // suggestion is something they can actually walk over and do.
+    const context = this.suggestionContext();
+    this.taskTitle.textContent = this.ctx.loc.t(suggestionHeading(context));
+
+    const remaining = rankSuggestions(this.director.remainingToday, context);
     if (remaining.length === 0) {
       this.taskList.appendChild(
         el('div', { class: 'task task--done' }, [

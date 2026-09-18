@@ -28,6 +28,7 @@ import { InteractionRunner } from '../gameplay/interact/InteractionRunner';
 import { ChildNotices } from '../gameplay/ChildNotices';
 import { setFaceResolution } from '../characters/Face';
 import { ParentReactions } from '../gameplay/ParentReactions';
+import type { SuggestionContext } from '../gameplay/Suggestions';
 import { buildHouseInteractions, type HouseState } from '../world/HouseInteractions';
 import { buildFarmInteractions, type FarmState } from '../world/FarmInteractions';
 import { AnimalAgent } from '../animals/AnimalAgent';
@@ -294,7 +295,12 @@ export class Game {
     this.ui = new UIRoot(ctx, uiMount);
     this.hud = new Hud(
       ctx,
-      { director: this.director, interaction: this.interaction, camera: this.cameraRig },
+      {
+        director: this.director,
+        interaction: this.interaction,
+        camera: this.cameraRig,
+        suggestionContext: () => this.buildSuggestionContext(),
+      },
       { onMenu: () => this.openParentGate(), onBook: () => this.openNatureBook() },
     );
     this.ui.setHud(this.hud.root);
@@ -409,6 +415,30 @@ export class Game {
       bedtime: () => this.house.bedtimeSteps(),
       ...this.farm.routines,
     });
+  }
+
+  /**
+   * Everything the suggestion list needs to know about right now.
+   *
+   * Assembled here because this is the only place that can see the child, the
+   * weather, the animals and the world's anchors at once.
+   */
+  private buildSuggestionContext(): SuggestionContext {
+    let hungry = 0;
+    let thirsty = 0;
+    for (const animal of this.animals.values()) {
+      if ((animal.state.fed ?? 0) < 1) hungry++;
+      if ((animal.state.watered ?? 0) < 1) thirsty++;
+    }
+    return {
+      phase: this.director.currentPhase,
+      weather: this.ctx.save.save.weather,
+      position: this.player.position,
+      indoors: this.player.isInsideHouse(),
+      hungryAnimals: hungry,
+      thirstyAnimals: thirsty,
+      anchorPosition: (id) => this.interaction.anchorPosition(id),
+    };
   }
 
   /** Adds a produced item to the inventory, respecting its stack limit. */
