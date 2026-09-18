@@ -1,4 +1,4 @@
-import { Group, Mesh, Object3D, SphereGeometry, MeshBasicMaterial, DoubleSide } from 'three';
+import { Group, Mesh, Object3D, SphereGeometry, type Material } from 'three';
 import { PartBuilder } from '../art/MeshKit';
 import { M } from '../art/Materials';
 import { Face, type Expression, type FaceStyle } from './Face';
@@ -264,16 +264,9 @@ export class CharacterRig {
       Math.PI * 0.22, Math.PI * 0.56,   // phi:   centred on +Z
       Math.PI * 0.27, Math.PI * 0.47,   // theta: centred just above the middle
     );
-    this.faceMesh = new Mesh(
-      faceGeo,
-      new MeshBasicMaterial({
-        map: this.face.texture,
-        side: DoubleSide,
-        transparent: true,
-        depthWrite: false,
-        toneMapped: true,
-      }),
-    );
+    const faceMat = M.face(this.face.texture);
+    (faceMat as unknown as { depthWrite: boolean }).depthWrite = false;
+    this.faceMesh = new Mesh(faceGeo, faceMat);
     this.faceMesh.position.set(0, 0.015 * s, 0);
     this.faceMesh.renderOrder = 1;
     head.add(this.faceMesh);
@@ -441,7 +434,7 @@ export class CharacterRig {
 
   dispose(): void {
     this.face.dispose();
-    (this.faceMesh.material as MeshBasicMaterial).dispose();
+    (this.faceMesh.material as Material).dispose();
     this.faceMesh.geometry.dispose();
   }
 }
@@ -1171,21 +1164,44 @@ function buildHead(look: CharacterLook, s: number, material: import('three').Mat
   const b = new PartBuilder();
   const r = look.adult ? 0.25 * s : 0.275 * s;
 
-  // Slightly squashed, slightly tapered toward the chin.
+  // A child's skull, not a ball: a broad cranium, a brow line, cheeks that
+  // pull in below it, and a small rounded chin. The extra profile points are
+  // what stop the head reading as a sphere with a face painted on it.
   b.lathe(
     [
       [0, -r * 1.02],
-      [r * 0.62, -r * 0.86],
-      [r * 0.95, -r * 0.4],
-      [r * 1.0, 0],
-      [r * 0.94, r * 0.5],
-      [r * 0.62, r * 0.88],
-      [0, r * 1.04],
+      [r * 0.52, -r * 0.94],
+      [r * 0.86, -r * 0.62],
+      [r * 0.99, -r * 0.22],   // brow line, the widest point
+      [r * 1.0, r * 0.08],
+      [r * 0.93, r * 0.38],    // cheekbone
+      [r * 0.74, r * 0.66],    // jaw pulling in
+      [r * 0.44, r * 0.9],
+      [0, r * 1.0],
     ],
     look.skin,
-    { scale: [1, 1, 0.94] },
-    14,
+    // Narrower front-to-back than side-to-side, as a head actually is.
+    { scale: [1, 1, 0.92] },
+    18,
   );
+
+  // Nose. The one facial feature that has to be geometry rather than paint,
+  // because it is the only one that shows in profile and the only one that
+  // should catch the light as the child turns their head.
+  //
+  // It sits deliberately PROUD of the face decal. The decal is a curved patch
+  // just off the skull, so anything at a similar radius punches through it in
+  // patches; putting the nose clearly in front instead makes that intentional,
+  // and the decal draws no nose of its own.
+  const noseZ = r * 1.0;
+  b.sphere(r * 0.1, look.skin, {
+    pos: [0, -r * 0.16, noseZ],
+    scale: [0.95, 0.66, 0.72],
+  }, 9);
+  b.sphere(r * 0.07, look.skin, {
+    pos: [0, -r * 0.02, noseZ - r * 0.05],
+    scale: [0.6, 1.3, 0.65],
+  }, 8);
 
   // Ears, angled slightly out.
   for (const side of [-1, 1]) {
@@ -1195,7 +1211,10 @@ function buildHead(look: CharacterLook, s: number, material: import('three').Mat
       scale: [0.5, 1.05, 0.85],
     }, 7);
   }
-  return b.toMesh('head', material, { smooth: true, smoothAngle: 1.4 });
+  // Barely any contact AO. A head is one smooth organic form, and the baked
+  // occlusion is size-weighted: a small sphere against a large one reads as a
+  // deep crease, which turned the nose into a dark ball stuck on the face.
+  return b.toMesh('head', material, { smooth: true, smoothAngle: 1.4, aoStrength: 0.12 });
 }
 
 /**
@@ -1262,7 +1281,7 @@ function buildHair(look: CharacterLook, s: number): Mesh {
         ],
         hair, { scale: [1, 1, 0.98] }, 14,
       );
-      addFringe(b, r, s, hair, 7, 0.2, 1);
+      addFringe(b, r, s, hair, 7, 0.12, 1);
       for (let i = 0; i < 5; i++) {
         b.sphere(0.055 * s, hair, {
           pos: [(-2 + i) * 0.06 * s, r * 0.78 + (i % 2) * 0.03 * s, r * 0.3],
@@ -1284,7 +1303,7 @@ function buildHair(look: CharacterLook, s: number): Mesh {
         ],
         hair, { scale: [1, 1, 1.02] }, 14,
       );
-      addFringe(b, r, s, hair, 9, 0.24, 0.3);
+      addFringe(b, r, s, hair, 9, 0.15, 0.3);
       for (const side of [-1, 1]) {
         b.capsule(0.07 * s, 0.2 * s, hair, {
           pos: [side * r * 0.98, -r * 0.5, 0],
@@ -1304,7 +1323,7 @@ function buildHair(look: CharacterLook, s: number): Mesh {
         ],
         hair, {}, 14,
       );
-      addFringe(b, r, s, hair, 7, 0.16, 0.7);
+      addFringe(b, r, s, hair, 7, 0.1, 0.7);
       for (const side of [-1, 1]) {
         b.sphere(0.055 * s, 'uiRed', { pos: [side * r * 0.95, r * 0.42, -r * 0.12] }, 6);
         b.capsule(0.075 * s, 0.22 * s, hair, {
@@ -1326,16 +1345,26 @@ function buildHair(look: CharacterLook, s: number): Mesh {
         ],
         hair, {}, 12,
       );
-      for (let i = 0; i < 11; i++) {
-        const a = (i / 11) * Math.PI * 2;
-        const ring = i % 2 === 0 ? 0.86 : 0.62;
-        b.sphere(0.075 * s, hair, {
-          pos: [
-            Math.cos(a) * r * ring,
-            r * (0.38 + (i % 3) * 0.16),
-            Math.sin(a) * r * ring * 0.9,
-          ],
-        }, 6);
+      // Three staggered rings of small, flattened curls rather than one ring of
+      // big spheres. Curls read as hair when they are smaller than the eye and
+      // overlap; at eleven large balls they read as a bunch of grapes.
+      for (let ring = 0; ring < 3; ring++) {
+        const count = 13 - ring * 2;
+        const height = r * (0.2 + ring * 0.3);
+        const spread = r * (1.0 - ring * 0.17);
+        for (let i = 0; i < count; i++) {
+          const a = (i / count) * Math.PI * 2 + ring * 0.42;
+          b.sphere(0.046 * s, hair, {
+            pos: [
+              Math.cos(a) * spread,
+              height + Math.sin(i * 2.7) * r * 0.06,
+              Math.sin(a) * spread * 0.92,
+            ],
+            // Flattened against the skull, so they sit as curls rather than
+            // as beads threaded round the head.
+            scale: [1.15, 0.85, 1.15],
+          }, 6);
+        }
       }
       break;
     }

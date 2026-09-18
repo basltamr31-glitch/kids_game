@@ -136,6 +136,8 @@ export function setMaterialQuality(options: { detail: boolean; rim: boolean }): 
 export interface SurfaceOptions {
   /** Palette key or hex string. Ignored when `vertexColors` is set. */
   tint?: string;
+  /** Colour texture. Multiplies the tint, so pass a white tint with one. */
+  map?: Texture;
   vertexColors?: boolean;
   transparent?: boolean;
   opacity?: number;
@@ -203,6 +205,7 @@ export function surface(options: SurfaceOptions = {}): Material {
       fog: options.fog ?? true,
       depthWrite: transparent ? opacity > 0.95 : true,
     });
+    if (options.map) basic.map = options.map;
     if (options.alphaTest) basic.alphaTest = options.alphaTest;
     material = basic;
   } else {
@@ -216,6 +219,7 @@ export function surface(options: SurfaceOptions = {}): Material {
       fog: options.fog ?? true,
       depthWrite: transparent ? opacity > 0.95 : true,
     });
+    if (options.map) toon.map = options.map;
     if (options.alphaTest) toon.alphaTest = options.alphaTest;
     if (options.emissive) {
       toon.emissive = color(options.emissive);
@@ -421,6 +425,27 @@ export const M = {
     surface({ vertexColors: true, detail, detailScale, detailStrength: 0.45 }),
 
   /** Living things: softer grain, stronger rim so silhouettes read. */
+  /**
+   * The face decal.
+   *
+   * Uses the SAME lighting model as the head, which is the whole point. An
+   * unlit decal on a toon-shaded head renders as a pale disc stuck to an
+   * orange face, because one is shaded by the sun and the other is not. Unique
+   * per character, since each carries its own face texture.
+   */
+  face: (map: Texture) =>
+    surface({
+      tint: '#FFFFFF',
+      map,
+      transparent: true,
+      doubleSided: true,
+      unique: true,
+      useAO: false,
+      // The head already supplies the rim; a second one on the decal would
+      // double it up exactly where the face is most visible.
+      rim: 0,
+    }),
+
   creature: () =>
     surface({
       vertexColors: true,

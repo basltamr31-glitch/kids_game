@@ -26,6 +26,7 @@ import { WeatherSystem } from '../gameplay/WeatherSystem';
 import { InteractableRegistry } from '../gameplay/interact/Interactable';
 import { InteractionRunner } from '../gameplay/interact/InteractionRunner';
 import { ChildNotices } from '../gameplay/ChildNotices';
+import { setFaceResolution } from '../characters/Face';
 import { ParentReactions } from '../gameplay/ParentReactions';
 import { buildHouseInteractions, type HouseState } from '../world/HouseInteractions';
 import { buildFarmInteractions, type FarmState } from '../world/FarmInteractions';
@@ -159,6 +160,11 @@ export class Game {
 
     /* --- lighting & weather --- */
     this.weather = new WeatherSystem(this.scene, ctx.quality, ctx.worldRng.fork('weather'));
+    // Faces are the one texture the camera gets close to, so they get the
+    // budget. Must happen before any character is built.
+    setFaceResolution(
+      ctx.quality.tier === 'low' ? 384 : ctx.quality.tier === 'medium' ? 640 : 896,
+    );
     this.weather.setSeason(save.season);
     this.weather.setWeather(save.weather, true);
 

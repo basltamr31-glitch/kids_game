@@ -35,7 +35,23 @@ export interface FaceStyle {
   freckles?: boolean;
 }
 
-const SIZE = 256;
+/**
+ * Face texture resolution.
+ *
+ * The features are laid out in a fixed 256-unit design space and scaled up, so
+ * this is a pure quality dial: raising it sharpens the face without moving a
+ * single feature. 256 was soft as soon as the camera came close, which is
+ * exactly when the face matters most.
+ */
+let SIZE = 768;
+
+/** Set once at start-up from the device's quality tier. */
+export function setFaceResolution(px: number): void {
+  SIZE = Math.max(256, Math.min(1024, Math.round(px)));
+}
+
+/** Design-space unit: all drawing below is authored against a 256 grid. */
+const DESIGN = 256;
 
 /** Per-expression drawing parameters, interpolated for smooth transitions. */
 interface FaceShape {
@@ -81,6 +97,26 @@ function blendShape(a: FaceShape, b: FaceShape, t: number): FaceShape {
     mouthWidth: mix(a.mouthWidth, b.mouthWidth),
     blush: mix(a.blush, b.blush),
   };
+}
+
+
+/**
+ * Lightens or darkens a hex colour, returning `#rrggbb` so the caller can
+ * append an alpha suffix. Used throughout the face for skin structure, where
+ * every shadow and highlight has to stay in the same family as the skin tone
+ * the player chose.
+ */
+function shadeSkin(hex: string, factor: number): string {
+  const value = hex.replace('#', '');
+  const full = value.length === 3
+    ? value.split('').map((c) => c + c).join('')
+    : value.slice(0, 6);
+  const n = parseInt(full, 16);
+  const to = (x: number): number => Math.max(0, Math.min(255, Math.round(x * factor)));
+  const r = to((n >> 16) & 255);
+  const g = to((n >> 8) & 255);
+  const b = to(n & 255);
+  return `#${((r << 16) | (g << 8) | b).toString(16).padStart(6, '0')}`;
 }
 
 export class Face {
@@ -211,188 +247,310 @@ export class Face {
     this.dirty = false;
 
     const ctx = this.ctx;
-    const cx = SIZE / 2;
+    // Everything below is authored on a 256 grid and scaled, so the layout is
+    // independent of the texture resolution.
+    const k = SIZE / DESIGN;
+    const cx = DESIGN / 2;
 
-    ctx.clearRect(0, 0, SIZE, SIZE);
-
-    // The face is a flat quad laid on a round head, so the texture must not
-    // fill its own square: the corners would read as a box stuck to the face.
-    // Instead we lay down a skin-coloured ellipse with a feathered edge, which
-    // dissolves into the head geometry and leaves only the features visible.
-    const faceGrad = ctx.createRadialGradient(SIZE / 2, SIZE * 0.52, SIZE * 0.18, SIZE / 2, SIZE * 0.52, SIZE * 0.5);
-    faceGrad.addColorStop(0, this.style.skin);
-    faceGrad.addColorStop(0.72, this.style.skin);
-    faceGrad.addColorStop(1, this.style.skin + '00');
-    ctx.fillStyle = faceGrad;
-    ctx.beginPath();
-    ctx.ellipse(SIZE / 2, SIZE * 0.52, SIZE * 0.5, SIZE * 0.5, 0, 0, Math.PI * 2);
-    ctx.fill();
-
-    // Large eyes set wide apart. This is the single strongest lever on how
-    // appealing a stylized child character reads, and the reason the features
-    // are drawn generously rather than to human proportion.
-    const eyeY = 112;
-    const eyeDx = 54;
-    const eyeRx = 22;
-    const eyeRy = 26 * s.eyeScaleY;
-
+    ctx.save();
+    ctx.setTransform(k, 0, 0, k, 0, 0);
+    ctx.clearRect(0, 0, DESIGN, DESIGN);
     ctx.lineCap = 'round';
     ctx.lineJoin = 'round';
 
-    /* ---------------- freckles ---------------- */
-    if (this.style.freckles) {
-      ctx.fillStyle = this.style.blush;
-      ctx.globalAlpha = 0.34;
-      // Deterministic scatter across both cheeks and the nose bridge.
-      for (let i = 0; i < 14; i++) {
-        const side = i % 2 === 0 ? -1 : 1;
-        const t = Math.floor(i / 2);
-        const fx = cx + side * (30 + ((t * 11) % 28));
-        const fy = 138 + ((t * 7) % 16);
-        ctx.beginPath();
-        ctx.arc(fx, fy, 2.4, 0, Math.PI * 2);
-        ctx.fill();
-      }
-      ctx.globalAlpha = 1;
-    }
+    const skin = this.style.skin;
+
+    /* ---------------- skin base ---------------- */
+    // The face is a curved patch on a round head, so the texture must not fill
+    // its own square: the corners would read as a box stuck to the face. A
+    // feathered ellipse dissolves into the head geometry and leaves only the
+    // features showing.
+    const faceGrad = ctx.createRadialGradient(cx, 133, 46, cx, 133, 128);
+    faceGrad.addColorStop(0, skin);
+    faceGrad.addColorStop(0.72, skin);
+    faceGrad.addColorStop(1, skin + '00');
+    ctx.fillStyle = faceGrad;
+    ctx.beginPath();
+    ctx.ellipse(cx, 133, 128, 128, 0, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Structure. A single flat skin tone reads as a mask however good the
+    // features are, so the temples and jaw are shaded down and the forehead,
+    // nose bridge and chin lifted. This is what gives the face form up close.
+    ctx.save();
+    ctx.beginPath();
+    ctx.ellipse(cx, 133, 118, 122, 0, 0, Math.PI * 2);
+    ctx.clip();
+
+    const shade = ctx.createRadialGradient(cx, 120, 40, cx, 128, 116);
+    shade.addColorStop(0, shadeSkin(skin, 0.86) + '00');
+    shade.addColorStop(0.72, shadeSkin(skin, 0.86) + '00');
+    shade.addColorStop(1, shadeSkin(skin, 0.86) + '66');
+    ctx.fillStyle = shade;
+    ctx.fillRect(0, 0, DESIGN, DESIGN);
+
+    ctx.restore();
 
     /* ---------------- blush ---------------- */
     if (s.blush > 0.01) {
-      ctx.fillStyle = this.style.blush;
-      ctx.globalAlpha = s.blush * 0.5;
+      ctx.save();
+      ctx.globalAlpha = s.blush * 0.46;
       for (const side of [-1, 1]) {
+        const g = ctx.createRadialGradient(cx + side * 62, 156, 3, cx + side * 62, 156, 30);
+        g.addColorStop(0, this.style.blush);
+        g.addColorStop(1, this.style.blush + '00');
+        ctx.fillStyle = g;
         ctx.beginPath();
-        ctx.ellipse(cx + side * 66, 154, 26, 16, 0, 0, Math.PI * 2);
+        ctx.ellipse(cx + side * 62, 156, 30, 20, side * 0.18, 0, Math.PI * 2);
         ctx.fill();
       }
-      ctx.globalAlpha = 1;
+      ctx.restore();
     }
 
-    /* ---------------- brows ---------------- */
-    ctx.strokeStyle = this.style.brow;
-    ctx.lineWidth = 8;
-    for (const side of [-1, 1]) {
-      const bx = cx + side * eyeDx;
-      const by = eyeY - 36 + s.browY;
-      // Tilt is mirrored so a worried brow rises at the inner end on both sides.
-      const tilt = s.browTilt * side * -1;
+    /* ---------------- freckles ---------------- */
+    if (this.style.freckles) {
       ctx.save();
-      ctx.translate(bx, by);
-      ctx.rotate(tilt);
+      ctx.fillStyle = shadeSkin(this.style.blush, 0.92);
+      ctx.globalAlpha = 0.3;
+      for (let i = 0; i < 14; i++) {
+        const side = i % 2 === 0 ? -1 : 1;
+        const t = Math.floor(i / 2);
+        const fx = cx + side * (28 + ((t * 11) % 26));
+        const fy = 146 + ((t * 7) % 14);
+        ctx.beginPath();
+        ctx.arc(fx, fy, 1.9 + (t % 2) * 0.5, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      ctx.restore();
+    }
+
+    /* ---------------- under-nose shadow ---------------- */
+    // The nose itself is geometry now. All that is painted is the soft shadow
+    // it drops onto the top lip, which is what seats it on the face.
+    {
+      ctx.save();
+      const drop = ctx.createRadialGradient(cx, 166, 2, cx, 166, 16);
+      drop.addColorStop(0, shadeSkin(skin, 0.74) + '77');
+      drop.addColorStop(1, shadeSkin(skin, 0.74) + '00');
+      ctx.fillStyle = drop;
       ctx.beginPath();
-      ctx.moveTo(-17, 3);
-      ctx.quadraticCurveTo(0, -5, 17, 2);
-      ctx.stroke();
+      ctx.ellipse(cx, 166, 16, 8, 0, 0, Math.PI * 2);
+      ctx.fill();
       ctx.restore();
     }
 
     /* ---------------- eyes ---------------- */
+    const eyeY = 112;
+    const eyeDx = 52;
+    const eyeRx = 21;
+    const eyeRy = 25 * s.eyeScaleY;
+
     for (const side of [-1, 1]) {
       const ex = cx + side * eyeDx;
 
       if (lid > 0.92) {
-        // Closed: a curved lash line. Curving it upward reads as contentment.
+        // Closed: a tapered lash line. Curving it up reads as contentment.
+        ctx.save();
         ctx.strokeStyle = this.style.eye;
-        ctx.lineWidth = 7;
+        ctx.lineWidth = 5.5;
         ctx.beginPath();
-        const arcUp = s.eyeSmile > 0.3;
-        if (arcUp) {
-          ctx.arc(ex, eyeY + 8, 15, Math.PI * 1.15, Math.PI * 1.85);
-        } else {
-          ctx.arc(ex, eyeY - 4, 15, Math.PI * 0.16, Math.PI * 0.84);
-        }
+        if (s.eyeSmile > 0.3) ctx.arc(ex, eyeY + 8, 15, Math.PI * 1.14, Math.PI * 1.86);
+        else ctx.arc(ex, eyeY - 4, 15, Math.PI * 0.16, Math.PI * 0.84);
         ctx.stroke();
+        ctx.restore();
         continue;
       }
 
-      // Sclera.
-      ctx.fillStyle = '#FFFFFF';
+      ctx.save();
+      // Clipped to the eye opening, so lids and socket shading can be drawn as
+      // broad fills without spilling onto the cheek.
       ctx.beginPath();
       ctx.ellipse(ex, eyeY, eyeRx, eyeRy, 0, 0, Math.PI * 2);
-      ctx.fill();
+      ctx.clip();
 
-      // Iris and pupil, offset by gaze but kept inside the sclera.
-      const px = ex + this.gazeX * eyeRx * 0.42;
-      const py = eyeY - this.gazeY * eyeRy * 0.34;
-      ctx.fillStyle = this.style.eye;
+      // Sclera: never pure white. A faintly warm, top-shaded ball sits in a
+      // socket instead of glowing out of the face.
+      const sclera = ctx.createLinearGradient(0, eyeY - eyeRy, 0, eyeY + eyeRy);
+      sclera.addColorStop(0, '#D9D2CE');
+      sclera.addColorStop(0.38, '#F7F3F0');
+      sclera.addColorStop(1, '#EDE6E1');
+      ctx.fillStyle = sclera;
+      ctx.fillRect(ex - eyeRx, eyeY - eyeRy, eyeRx * 2, eyeRy * 2);
+
+      const px = ex + this.gazeX * eyeRx * 0.40;
+      const py = eyeY - this.gazeY * eyeRy * 0.30;
+      const irisR = Math.min(eyeRy * 0.86, eyeRx * 0.80);
+
+      const iris = ctx.createRadialGradient(px, py - irisR * 0.25, irisR * 0.15, px, py, irisR);
+      iris.addColorStop(0, shadeSkin(this.style.eye, 1.5));
+      iris.addColorStop(0.55, this.style.eye);
+      iris.addColorStop(1, shadeSkin(this.style.eye, 0.55));
+      ctx.fillStyle = iris;
       ctx.beginPath();
-      ctx.ellipse(px, py, eyeRx * 0.74, Math.min(eyeRy * 0.92, eyeRx * 0.86), 0, 0, Math.PI * 2);
+      ctx.arc(px, py, irisR, 0, Math.PI * 2);
       ctx.fill();
 
-      // Catchlights. The single cheapest way to make eyes feel alive.
+      // Limbal ring. Real eyes have one, and stylised eyes read far better
+      // with it: it separates iris from white cleanly at any distance.
+      ctx.strokeStyle = shadeSkin(this.style.eye, 0.42);
+      ctx.lineWidth = 2.2;
+      ctx.beginPath();
+      ctx.arc(px, py, irisR - 1, 0, Math.PI * 2);
+      ctx.stroke();
+
+      ctx.fillStyle = '#14100F';
+      ctx.beginPath();
+      ctx.arc(px, py, irisR * 0.44, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Catchlights: one large upper-left, one small lower-right. The cheapest
+      // thing that makes eyes look wet and alive.
       ctx.fillStyle = '#FFFFFF';
       ctx.beginPath();
-      ctx.arc(px + 5, py - 6, 4.6, 0, Math.PI * 2);
+      ctx.arc(px - irisR * 0.34, py - irisR * 0.40, irisR * 0.30, 0, Math.PI * 2);
       ctx.fill();
+      ctx.globalAlpha = 0.75;
       ctx.beginPath();
-      ctx.arc(px - 5, py + 5, 2.2, 0, Math.PI * 2);
+      ctx.arc(px + irisR * 0.36, py + irisR * 0.34, irisR * 0.14, 0, Math.PI * 2);
       ctx.fill();
+      ctx.globalAlpha = 1;
 
-      // Upper lid sliding down over the eye.
+      // Socket shadow under the upper lid.
+      const socket = ctx.createLinearGradient(0, eyeY - eyeRy, 0, eyeY);
+      socket.addColorStop(0, '#6A4A3C88');
+      socket.addColorStop(1, '#6A4A3C00');
+      ctx.fillStyle = socket;
+      ctx.fillRect(ex - eyeRx, eyeY - eyeRy, eyeRx * 2, eyeRy);
+
       if (lid > 0.01) {
-        ctx.fillStyle = this.style.skin;
-        // Opaque here on purpose: this is an eyelid drawn over the eye, well
-        // inside the feathered region, so it never reaches the quad's edge.
-        ctx.beginPath();
-        ctx.rect(ex - eyeRx - 2, eyeY - eyeRy - 2, eyeRx * 2 + 4, (eyeRy * 2 + 4) * lid);
-        ctx.fill();
-        ctx.strokeStyle = this.style.eye;
-        ctx.lineWidth = 5;
-        ctx.beginPath();
-        ctx.moveTo(ex - eyeRx, eyeY - eyeRy + (eyeRy * 2) * lid);
-        ctx.lineTo(ex + eyeRx, eyeY - eyeRy + (eyeRy * 2) * lid);
-        ctx.stroke();
+        ctx.fillStyle = skin;
+        ctx.fillRect(ex - eyeRx - 2, eyeY - eyeRy - 2, eyeRx * 2 + 4, (eyeRy * 2 + 4) * lid);
       }
 
-      // Lower lash lift for a smiling eye.
-      if (s.eyeSmile > 0.1 && lid < 0.5) {
-        ctx.fillStyle = this.style.skin;
+      // Lower lash lift for a smiling eye: the cheek pushing up into the eye.
+      if (s.eyeSmile > 0.1) {
+        ctx.fillStyle = skin;
         ctx.beginPath();
-        ctx.ellipse(ex, eyeY + eyeRy * 0.85, eyeRx * 1.25, eyeRy * 0.75 * s.eyeSmile, 0, 0, Math.PI * 2);
+        ctx.ellipse(ex, eyeY + eyeRy * 0.92, eyeRx * 1.3, eyeRy * 0.8 * s.eyeSmile, 0, 0, Math.PI * 2);
         ctx.fill();
       }
+      ctx.restore();
+
+      // Upper lash line, drawn OUTSIDE the clip so it reads as a rim around
+      // the eye rather than a stroke inside it.
+      ctx.save();
+      ctx.strokeStyle = this.style.eye;
+      ctx.lineCap = 'round';
+      const lashY = eyeY - eyeRy + (eyeRy * 2) * lid;
+      ctx.lineWidth = 4.6;
+      ctx.beginPath();
+      ctx.moveTo(ex - eyeRx * 0.98, lashY + eyeRy * 0.18);
+      ctx.quadraticCurveTo(ex, lashY - eyeRy * 0.22, ex + eyeRx * 0.98, lashY + eyeRy * 0.18);
+      ctx.stroke();
+      // Outer corner lash, which is what makes the eye read as a child's.
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      ctx.moveTo(ex + side * eyeRx * 0.92, lashY + eyeRy * 0.16);
+      ctx.lineTo(ex + side * eyeRx * 1.24, lashY + eyeRy * 0.02);
+      ctx.stroke();
+      ctx.restore();
     }
 
-    /* ---------------- nose ---------------- */
-    ctx.strokeStyle = this.style.blush;
-    ctx.globalAlpha = 0.45;
-    ctx.lineWidth = 5;
-    ctx.beginPath();
-    ctx.arc(cx, 152, 7, Math.PI * 0.15, Math.PI * 0.85);
-    ctx.stroke();
-    ctx.globalAlpha = 1;
+    /* ---------------- brows ---------------- */
+    // Filled tapered shapes rather than constant-width strokes. A brow is thick
+    // at the inner end and thins toward the temple, and that taper is most of
+    // what stops it reading as a drawn-on dash.
+    for (const side of [-1, 1]) {
+      const bx = cx + side * eyeDx;
+      const by = eyeY - 34 + s.browY;
+      const tilt = s.browTilt * side * -1;
+      ctx.save();
+      ctx.translate(bx, by);
+      ctx.rotate(tilt);
+      ctx.fillStyle = this.style.brow;
+      ctx.beginPath();
+      const inner = -side * 17;
+      const outer = side * 17;
+      ctx.moveTo(inner, 4.5);
+      ctx.quadraticCurveTo(0, -5.5, outer, 1.5);
+      ctx.quadraticCurveTo(0, 0.5, inner, 8.5);
+      ctx.closePath();
+      ctx.fill();
+      ctx.restore();
+    }
 
     /* ---------------- mouth ---------------- */
-    const mouthY = 190;
-    const halfWidth = 30 * s.mouthWidth;
+    const mouthY = 188;
+    const halfWidth = 29 * s.mouthWidth;
+    // A mouth drawn in a desaturated skin shade reads as a pencil line. Lips
+    // are the one warm feature on a face and have to be drawn that way.
+    const lipDark = '#9C4A44';
 
     if (s.mouthOpen > 0.06) {
-      // Open mouth: a lens shape between an upper and lower curve.
-      const openH = 6 + s.mouthOpen * 26;
-      ctx.fillStyle = '#8C4A47';
+      const openH = 5 + s.mouthOpen * 25;
+
+      ctx.save();
       ctx.beginPath();
       ctx.moveTo(cx - halfWidth, mouthY);
-      ctx.quadraticCurveTo(cx, mouthY - s.mouthCurve * 12, cx + halfWidth, mouthY);
+      ctx.quadraticCurveTo(cx, mouthY - s.mouthCurve * 11, cx + halfWidth, mouthY);
       ctx.quadraticCurveTo(cx, mouthY + openH, cx - halfWidth, mouthY);
+      ctx.closePath();
+      ctx.fillStyle = '#6E322F';
+      ctx.fill();
+      ctx.clip();
+
+      // Upper teeth: a soft band, never individual teeth at this scale.
+      ctx.fillStyle = '#FBF6F1';
+      ctx.beginPath();
+      ctx.moveTo(cx - halfWidth, mouthY - 1);
+      ctx.quadraticCurveTo(cx, mouthY - s.mouthCurve * 11 - 1, cx + halfWidth, mouthY - 1);
+      ctx.lineTo(cx + halfWidth, mouthY + Math.min(6, openH * 0.3));
+      ctx.quadraticCurveTo(cx, mouthY + Math.min(9, openH * 0.42), cx - halfWidth, mouthY + Math.min(6, openH * 0.3));
+      ctx.closePath();
       ctx.fill();
 
-      // Tongue, for a proper laugh.
       if (s.mouthOpen > 0.5) {
         ctx.fillStyle = '#D8807C';
         ctx.beginPath();
-        ctx.ellipse(cx, mouthY + openH * 0.55, halfWidth * 0.5, openH * 0.3, 0, 0, Math.PI * 2);
+        ctx.ellipse(cx, mouthY + openH * 0.72, halfWidth * 0.52, openH * 0.32, 0, 0, Math.PI * 2);
         ctx.fill();
       }
-    } else {
-      // Closed mouth: a single stroked curve.
-      ctx.strokeStyle = this.style.eye;
-      ctx.lineWidth = 6;
+      ctx.restore();
+
+      ctx.strokeStyle = lipDark;
+      ctx.lineWidth = 3;
       ctx.beginPath();
-      ctx.moveTo(cx - halfWidth, mouthY - s.mouthCurve * 4);
-      ctx.quadraticCurveTo(cx, mouthY + s.mouthCurve * 18, cx + halfWidth, mouthY - s.mouthCurve * 4);
+      ctx.moveTo(cx - halfWidth, mouthY);
+      ctx.quadraticCurveTo(cx, mouthY - s.mouthCurve * 11, cx + halfWidth, mouthY);
+      ctx.quadraticCurveTo(cx, mouthY + openH, cx - halfWidth, mouthY);
+      ctx.closePath();
       ctx.stroke();
+    } else {
+      // Closed: a lip line with a dip in the middle, plus a lit lower lip. A
+      // single stroked arc is what made the old mouth read as a drawn-on smile.
+      const curve = s.mouthCurve;
+      ctx.save();
+      ctx.strokeStyle = lipDark;
+      ctx.lineWidth = 5;
+      ctx.beginPath();
+      // Corners lifted well above the centre, so even a neutral mouth has the
+      // faint upturn a contented child has rather than reading as a flat dash.
+      ctx.moveTo(cx - halfWidth, mouthY - 4 - curve * 5);
+      ctx.quadraticCurveTo(cx - halfWidth * 0.42, mouthY + 4 + curve * 12, cx, mouthY + 2 + curve * 7);
+      ctx.quadraticCurveTo(cx + halfWidth * 0.42, mouthY + 4 + curve * 12, cx + halfWidth, mouthY - 4 - curve * 5);
+      ctx.stroke();
+
+      const lipLit = ctx.createLinearGradient(0, mouthY + curve * 7, 0, mouthY + curve * 7 + 11);
+      lipLit.addColorStop(0, shadeSkin(skin, 1.1) + 'BB');
+      lipLit.addColorStop(1, shadeSkin(skin, 1.1) + '00');
+      ctx.fillStyle = lipLit;
+      ctx.beginPath();
+      ctx.ellipse(cx, mouthY + curve * 7 + 5, halfWidth * 0.8, 7, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
     }
 
+    ctx.restore();
     this.texture.needsUpdate = true;
   }
 
