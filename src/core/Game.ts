@@ -65,6 +65,8 @@ import { APP_VERSION, LINKS } from './Config';
  * `src/content`, and anything that looks like a mechanic lives in a system under
  * `src/gameplay`.
  */
+const _animalBodies: { x: number; z: number; r: number }[] = [];
+
 export class Game {
   private ctx: GameContext;
   private renderer: WebGLRenderer;
@@ -177,7 +179,8 @@ export class Game {
     // be more literal, but it puts the follow camera inside the chalet on the
     // very first frame, which is the worst possible first impression.
     const spawn = this.world.anchors.get('yardcenter')?.position.clone() ?? new Vector3(0, 0, 9);
-    this.player = new Player(save.child, this.world.terrain, spawn);
+    this.player = new Player(save.child, this.world.terrain, spawn, this.world.collision);
+    this.player.setNavGrid(this.world.nav);
     this.player.onFootstep = (surface) => {
       const map = {
         grass: 'footstepGrass',
@@ -569,7 +572,8 @@ export class Game {
     const previousFootstep = this.player.onFootstep;
     this.player.dispose();
 
-    this.player = new Player(appearance, this.world.terrain, position);
+    this.player = new Player(appearance, this.world.terrain, position, this.world.collision);
+    this.player.setNavGrid(this.world.nav);
     this.player.onFootstep = previousFootstep;
     this.actorRoot.add(this.player.group);
 
@@ -811,6 +815,18 @@ export class Game {
     this.input.endFrame();
 
     /* --- simulation --- */
+    // Animals move, so they are fed to collision each frame rather than being
+    // baked into the grid. A child should bump into a cow, not walk through it.
+    _animalBodies.length = 0;
+    for (const animal of this.animals.values()) {
+      _animalBodies.push({
+        x: animal.position.x,
+        z: animal.position.z,
+        r: animal.definition.kind === 'chicken' ? 0.28 : 0.62,
+      });
+    }
+    this.world.collision.setDynamic(_animalBodies);
+
     this.registry.update(dt);
     this.house.update(dt, this.player.position);
     this.runner.update(dt);

@@ -4,6 +4,10 @@ import { Sky } from './Sky';
 import { buildMountains, Water, buildStreamBank } from './Landscape';
 import { buildChalet, buildBarn, buildCoop, type BuildingResult } from './Buildings';
 import { AmbientLife } from './AmbientLife';
+import { CollisionWorld } from './Collision';
+import { NavGrid } from './NavGrid';
+import { LAYOUT } from './Layout';
+import { DOOR_HALF_WIDTH, HOUSE_HALF_X, HOUSE_HALF_Z } from './HouseNav';
 import {
   buildFence,
   buildWell,
@@ -70,6 +74,10 @@ export interface BuiltWorld {
   seasonal: Group;
   /** Butterflies, birds and chimney smoke. Decorative, updated every frame. */
   ambient: AmbientLife;
+  /** Everything solid. Populated here as the world is built. */
+  collision: CollisionWorld;
+  /** Routes around it. Built once the obstacles are all registered. */
+  nav: NavGrid;
 }
 
 /**
@@ -86,23 +94,24 @@ const GRASS_RINGS: GrassRing[] = [
   { inner: 52, outer: 88, blades: 3, curve: false, density: 0.16, wind: 0.7 },
 ];
 
-/** Layout constants — one place to move a whole building. */
-export const LAYOUT = {
-  house: new Vector3(-19, 0, -2),
-  houseRotation: 0,
-  barn: new Vector3(20, 0, -4),
-  barnRotation: -0.25,
-  coop: new Vector3(-3, 0, 20),
-  garden: new Vector3(-19, 0, 16),
-  well: new Vector3(-9, 0, 4),
-  haystack: new Vector3(9, 0, 3),
-  trough: new Vector3(16, 0, 13),
-  yardCentre: new Vector3(0, 0, 9),
-  meadowView: new Vector3(3, 0, 44),
-  streamZ: 68,
-  bridge: new Vector3(0, 0, 68),
-  appleTree: new Vector3(-34, 0, 7),
-};
+export { LAYOUT } from './Layout';
+
+
+/**
+ * A fence you can see and a fence you can walk through are two different
+ * fences. Registering the same polyline that draws it is what keeps them the
+ * same object.
+ */
+function fenceWithCollision(
+  root: Group,
+  collision: CollisionWorld,
+  points: [number, number][],
+  terrain: Terrain,
+  rng: Rng,
+): void {
+  root.add(buildFence(points, terrain, rng));
+  collision.addPolyline(points, 0.22, 'fence');
+}
 
 export function buildWorld(
   scene: Scene,
@@ -116,6 +125,7 @@ export function buildWorld(
 
   const anchors = new Map<string, Anchor>();
   const cutaways: BuiltWorld['cutaways'] = [];
+  const collision = new CollisionWorld();
   const seasonal = new Group();
   seasonal.name = 'seasonal';
 
@@ -201,47 +211,29 @@ export function buildWorld(
   /* ---------------- fences ---------------- */
   // Pasture enclosure, with a gap on the farmyard side so the child can walk in.
   const fenceRng = rng.fork('fences');
-  root.add(
-    buildFence(
-      [
+  fenceWithCollision(root, collision, [
         [11, 6],
         [40, 6],
         [40, 34],
         [11, 34],
         [11, 20],
-      ],
-      terrain,
-      fenceRng,
-    ),
-  );
+      ], terrain, fenceRng);
   // Chicken run.
-  root.add(
-    buildFence(
-      [
+  fenceWithCollision(root, collision, [
         [-9, 15],
         [4, 15],
         [4, 26],
         [-9, 26],
         [-9, 18],
-      ],
-      terrain,
-      fenceRng,
-    ),
-  );
+      ], terrain, fenceRng);
   // Garden edging.
-  root.add(
-    buildFence(
-      [
+  fenceWithCollision(root, collision, [
         [-26, 9],
         [-12, 9],
         [-12, 23],
         [-26, 23],
         [-26, 11],
-      ],
-      terrain,
-      fenceRng,
-    ),
-  );
+      ], terrain, fenceRng);
 
   /* ---------------- vegetation ---------------- */
   const insideBuildings = (x: number, z: number): boolean => {
@@ -301,7 +293,7 @@ export function buildWorld(
   // Woodland closing off the valley sides, plus the orchard. Kept out of the
   // corridor the doll's-house camera looks down when the child is indoors.
   const blocksView = makeViewCorridorTest(cutaways);
-  plantAllTrees(seasonal, rng, terrain, quality, season, insideBuildings, blocksView);
+  plantAllTrees(seasonal, rng, terrain, quality, season, insideBuildings, blocksView, collision);
 
   root.add(seasonal);
 
@@ -352,6 +344,32 @@ export function buildWorld(
   // Barn's hay is also reachable inside the barn, which is where a child looks.
   add('barnhay', LAYOUT.barn.x - 4.5, LAYOUT.barn.z - 2.5, 'barn', 2.0, true);
 
+  /* ---------------- collision ---------------- */
+  // Registered from the same LAYOUT the meshes are placed from, so a building
+  // that moves takes its footprint with it.
+  collision.addBox(LAYOUT.barn.x, LAYOUT.barn.z, 7.0, 5.6, LAYOUT.barnRotation, 'building');
+  collision.addBox(LAYOUT.coop.x, LAYOUT.coop.z, 2.2, 1.8, 0.5, 'building');
+  collision.addCircle(LAYOUT.well.x, LAYOUT.well.z, 1.35, 'prop');
+  collision.addCircle(LAYOUT.haystack.x, LAYOUT.haystack.z, 2.2, 'prop');
+  collision.addBox(LAYOUT.trough.x, LAYOUT.trough.z, 1.7, 0.8, 0, 'prop');
+
+  // The chalet is a box with a doorway punched through the front, so it is
+  // registered as three walls rather than one block: the child has to be able
+  // to walk in through the gap.
+  {
+    const hx = HOUSE_HALF_X;
+    const hz = HOUSE_HALF_Z;
+    const h = LAYOUT.house;
+    const door = DOOR_HALF_WIDTH + 0.25;
+    collision.addBox(h.x, h.z - hz, hx, 0.3, 0, 'building');          // back
+    collision.addBox(h.x - hx, h.z, 0.3, hz, 0, 'building');          // left
+    collision.addBox(h.x + hx, h.z, 0.3, hz, 0, 'building');          // right
+    // Front wall either side of the doorway.
+    const sideWidth = (hx - door) / 2;
+    collision.addBox(h.x - door - sideWidth, h.z + hz, sideWidth, 0.3, 0, 'building');
+    collision.addBox(h.x + door + sideWidth, h.z + hz, sideWidth, 0.3, 0, 'building');
+  }
+
   // Ambient life last, so it can read the finished buildings' chimneys.
   const chimneys: Vector3[] = [];
   for (const cutaway of cutaways) {
@@ -365,7 +383,10 @@ export function buildWorld(
   });
   root.add(ambient.group);
 
-  return { root, terrain, sky, water, anchors, cutaways, seasonal, ambient };
+  // Last of all, once every obstacle above has registered itself.
+  const nav = new NavGrid(collision, terrain);
+
+  return { root, terrain, sky, water, anchors, cutaways, seasonal, ambient, collision, nav };
 }
 
 function near(x: number, z: number, point: Vector3, radius: number): boolean {
@@ -428,7 +449,10 @@ function plantAllTrees(
   season: Season,
   insideBuildings: (x: number, z: number) => boolean,
   blocksView: (x: number, z: number) => boolean,
+  collision: CollisionWorld,
 ): void {
+  // Trees are seasonal, so their colliders are too.
+  collision.clearTag('tree');
   const treeCount = quality.treeDetail === 0 ? 34 : quality.treeDetail === 1 ? 60 : 90;
   const open = (x: number, z: number): boolean => !blocksView(x, z);
 
@@ -468,16 +492,20 @@ function plantAllTrees(
   ];
 
   for (const band of bands) {
-    target.add(
-      plantTrees(
-        rng.fork(`trees-${band.label}-${season}`),
-        terrain,
-        { count: band.count, bounds: band.bounds, accept: band.accept },
-        quality,
-        season,
-        band.kind,
-      ),
+    const planted = plantTrees(
+      rng.fork(`trees-${band.label}-${season}`),
+      terrain,
+      { count: band.count, bounds: band.bounds, accept: band.accept },
+      quality,
+      season,
+      band.kind,
     );
+    // Trunks only: a child should be able to walk under a canopy, just not
+    // through the thing holding it up.
+    for (const tree of planted.children) {
+      collision.addCircle(tree.position.x, tree.position.z, 0.42, 'tree');
+    }
+    target.add(planted);
   }
 
   /* ---------------- orchard ---------------- */
@@ -491,6 +519,7 @@ function plantAllTrees(
       // A gap in a row of fruit trees reads as a tree that died; a tree growing
       // through the middle of the kitchen does not.
       if (blocksView(x, z)) continue;
+      collision.addCircle(x, z, 0.4, 'tree');
       const tree = new ThreeMesh(appleGeo, M.foliage(0.55));
       tree.position.set(x, terrain.heightAt(x, z) - 0.2, z);
       tree.rotation.y = rng.range(0, Math.PI * 2);
@@ -614,7 +643,10 @@ export function rebuildSeasonalContent(
     season,
     insideBuildings,
     makeViewCorridorTest(world.cutaways),
+    world.collision,
   );
+  // The trees just moved, so the routes around them have to be recomputed.
+  world.nav.rebuild();
 }
 
 function disposeGroup(group: Object3D): void {

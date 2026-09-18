@@ -1,5 +1,5 @@
 import { Vector3 } from 'three';
-import { LAYOUT } from './WorldBuilder';
+import { LAYOUT } from './Layout';
 
 /**
  * Getting in and out of the chalet.

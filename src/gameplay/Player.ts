@@ -7,13 +7,9 @@ import { PartBuilder } from '../art/MeshKit';
 import { SKIN_TONES, HAIR_COLORS, OUTFIT_PRIMARY, OUTFIT_SECONDARY } from '../art/Palette';
 import type { CharacterAppearance } from '../save/SaveSchema';
 import { LAYOUT } from '../world/WorldBuilder';
-import {
-  DOOR_HALF_WIDTH,
-  HOUSE_HALF_X,
-  HOUSE_HALF_Z,
-  isInsideHouse,
-  routeThroughDoor,
-} from '../world/HouseNav';
+import type { CollisionWorld } from '../world/Collision';
+import type { NavGrid } from '../world/NavGrid';
+import { isInsideHouse, routeThroughDoor } from '../world/HouseNav';
 import type { Seat } from './interact/Interactable';
 
 /**
@@ -27,15 +23,14 @@ import type { Seat } from './interact/Interactable';
 
 export type Surface = 'grass' | 'dirt' | 'wood' | 'snow';
 
-/** Building footprints the child walks around rather than through. */
-const BLOCKERS: { centre: Vector3; radiusX: number; radiusZ: number }[] = [
-  { centre: LAYOUT.barn.clone(), radiusX: 7.6, radiusZ: 6.2 },
-  { centre: LAYOUT.coop.clone(), radiusX: 2.4, radiusZ: 2.0 },
-  { centre: LAYOUT.well.clone(), radiusX: 1.6, radiusZ: 1.6 },
-  { centre: LAYOUT.haystack.clone(), radiusX: 2.4, radiusZ: 2.4 },
-  { centre: LAYOUT.trough.clone(), radiusX: 1.9, radiusZ: 1.0 },
-];
+/** How wide the child is, for collision. A little under their shoulders. */
+const BODY_RADIUS = 0.26;
 
+/** Scratch for collision results, so movement allocates nothing per frame. */
+const _slide = { x: 0, z: 0 };
+
+/** Reused path buffer; walkTo is called often enough to matter. */
+const _pathScratch: Vector3[] = [];
 
 export class Player {
   readonly group = new Group();
@@ -51,6 +46,8 @@ export class Player {
   private speed = 0;
   private facing = 0;
   private terrain: Terrain;
+  private collision: CollisionWorld;
+  private nav: NavGrid | null = null;
   private scripted = false;
 
   /** True while a prop is in the hand, so idle holds the carry pose. */
@@ -63,8 +60,14 @@ export class Player {
   onArrive: (() => void) | null = null;
   onFootstep: ((surface: Surface) => void) | null = null;
 
-  constructor(appearance: CharacterAppearance, terrain: Terrain, spawn: Vector3) {
+  constructor(
+    appearance: CharacterAppearance,
+    terrain: Terrain,
+    spawn: Vector3,
+    collision: CollisionWorld,
+  ) {
     this.terrain = terrain;
+    this.collision = collision;
     this.rig = new CharacterRig(lookFromAppearance(appearance));
     this.group.add(this.rig.group);
 
@@ -72,6 +75,11 @@ export class Player {
     this.position.y = terrain.heightAt(spawn.x, spawn.z);
     this.group.position.copy(this.position);
     this.bindFootsteps();
+  }
+
+  /** Handed the routing grid once the world has finished building. */
+  setNavGrid(nav: NavGrid): void {
+    this.nav = nav;
   }
 
   get isMoving(): boolean {
@@ -102,10 +110,22 @@ export class Player {
   }
 
   /**
-   * Builds the waypoint list. Returns the destination alone when start and end
-   * are on the same side of the front wall.
+   * Builds the waypoint list.
+   *
+   * A* over the navigation grid, which knows where every fence, tree, wall and
+   * water trough is. This also supersedes the two hand-placed waypoints either
+   * side of the front door: the house is registered as walls with a gap, so a
+   * route through the doorway is something the search finds rather than
+   * something this code has to be told about.
+   *
+   * If no route exists at all, walk straight at the target. A child who will
+   * not move because the pathfinder gave up is worse than one who bumps into
+   * something.
    */
   private routeTo(destination: Vector3): Vector3[] {
+    if (this.nav && this.nav.findPath(this.position, destination, _pathScratch)) {
+      return _pathScratch.map((p) => p.clone());
+    }
     return routeThroughDoor(this.position, destination);
   }
 
@@ -332,26 +352,16 @@ export class Player {
     return this.position.clone();
   }
 
+  /**
+   * Whether the child's body fits here.
+   *
+   * Everything solid now lives in the world's CollisionWorld, registered by
+   * whatever built it, so fences, trees, furniture and animals are all
+   * included rather than only the five building footprints this used to know
+   * about by hand.
+   */
   private isBlocked(x: number, z: number): boolean {
-    for (const blocker of BLOCKERS) {
-      const dx = Math.abs(x - blocker.centre.x);
-      const dz = Math.abs(z - blocker.centre.z);
-      if (dx < blocker.radiusX && dz < blocker.radiusZ) return true;
-    }
-    // The house: solid walls, except the doorway on the +Z face.
-    const hx = x - LAYOUT.house.x;
-    const hz = z - LAYOUT.house.z;
-    const inX = Math.abs(hx) < HOUSE_HALF_X + 0.5;
-    const inZ = Math.abs(hz) < HOUSE_HALF_Z + 0.5;
-    if (inX && inZ) {
-      const insideCore =
-        Math.abs(hx) < HOUSE_HALF_X - 0.5 && Math.abs(hz) < HOUSE_HALF_Z - 0.5;
-      if (insideCore) return false; // free to walk around inside
-      // On the wall band: only the doorway is passable.
-      const atDoor = hz > HOUSE_HALF_Z - 1.2 && Math.abs(hx) < DOOR_HALF_WIDTH;
-      return !atDoor;
-    }
-    return false;
+    return this.collision.blocks(x, z, BODY_RADIUS);
   }
 
   /** Axis-separated resolution: blocked on X still allows sliding on Z. */
@@ -361,16 +371,20 @@ export class Player {
     toX: number,
     toZ: number,
   ): { x: number; z: number } {
-    if (!this.isBlocked(toX, toZ) && this.terrain.isWalkable(toX, toZ)) {
-      return { x: toX, z: toZ };
+    // Terrain walkability is a separate question from obstacles: a slope can
+    // be too steep to climb with nothing standing on it at all.
+    let wantX = toX;
+    let wantZ = toZ;
+    if (!this.terrain.isWalkable(wantX, wantZ)) {
+      if (this.terrain.isWalkable(wantX, fromZ)) wantZ = fromZ;
+      else if (this.terrain.isWalkable(fromX, wantZ)) wantX = fromX;
+      else {
+        _slide.x = fromX;
+        _slide.z = fromZ;
+        return _slide;
+      }
     }
-    if (!this.isBlocked(toX, fromZ) && this.terrain.isWalkable(toX, fromZ)) {
-      return { x: toX, z: fromZ };
-    }
-    if (!this.isBlocked(fromX, toZ) && this.terrain.isWalkable(fromX, toZ)) {
-      return { x: fromX, z: toZ };
-    }
-    return { x: fromX, z: fromZ };
+    return this.collision.resolve(fromX, fromZ, wantX, wantZ, BODY_RADIUS, _slide);
   }
 
   dispose(): void {
