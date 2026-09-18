@@ -177,6 +177,25 @@ export function buildChalet(rng: Rng): BuildingResult {
   shell.receiveShadow = true;
   group.add(shell);
 
+  /* --- upper floor ---
+   *
+   * Built into the SHELL rather than the interior, which is the whole trick
+   * behind the interior camera. The shell is "everything that should get out
+   * of the way once you are inside", and a solid first floor over the child's
+   * head is exactly that: it is what stopped the camera being able to look
+   * down into the room at all. Fading with the outer walls means the ceiling
+   * lifts off at precisely the moment the child walks in.
+   */
+  {
+    const uy = upperY + 0.16;
+    b.box(W - 0.4, 0.14, D - 0.4, 'woodMid', { pos: [0, upperY + 0.08, 0] });
+    b.bevelBox(2.3, 0.42, 2.4, 0.04, 'woodWarm', { pos: [3.2, uy + 0.3, 1.4] });
+    b.bevelBox(2.2, 0.26, 2.1, 0.08, 'wallPlaster', { pos: [3.2, uy + 0.64, 1.4] });
+    b.bevelBox(2.2, 0.2, 1.2, 0.07, 'motherDress', { pos: [3.2, uy + 0.74, 2.0] });
+    b.bevelBox(1.5, 2.2, 0.7, 0.03, 'woodMid', { pos: [-4.0, uy + 1.1, -4.0] });
+    b.bevelBox(2.0, 0.04, 1.6, 0.01, 'meadowFlowerC', { pos: [0.0, uy + 0.08, 0.6] });
+  }
+
   /* --- interior (revealed by the cutaway) --- */
   const interior = buildChaletInterior(W, D, H1, upperY);
   group.add(interior);
@@ -257,7 +276,6 @@ function buildChaletInterior(W: number, D: number, H1: number, upperY: number): 
       i % 3 === 0 ? 'woodMid' : i % 3 === 1 ? 'woodWarm' : 'woodBalcony',
       { pos: [x, floorY, 0] });
   }
-  b.box(W - 0.4, 0.14, D - 0.4, 'woodMid', { pos: [0, upperY + 0.08, 0] });
 
   /* --- walls that remain when the shell fades --- */
   b.box(W - 0.4, H1, 0.18, 'wallPlasterShade', { pos: [0, floorY + H1 / 2, -D / 2 + 0.3] });
@@ -324,14 +342,6 @@ function buildChaletInterior(W: number, D: number, H1: number, upperY: number): 
       pos: [1.48, floorY + 0.5 + i * 0.68, 4.2 - i * 0.88],
     });
   }
-
-  /* --- upper floor, seen through the cutaway --- */
-  const uy = upperY + 0.16;
-  b.bevelBox(2.3, 0.42, 2.4, 0.04, 'woodWarm', { pos: [3.2, uy + 0.3, 1.4] });
-  b.bevelBox(2.2, 0.26, 2.1, 0.08, 'wallPlaster', { pos: [3.2, uy + 0.64, 1.4] });
-  b.bevelBox(2.2, 0.2, 1.2, 0.07, 'motherDress', { pos: [3.2, uy + 0.74, 2.0] });
-  b.bevelBox(1.5, 2.2, 0.7, 0.03, 'woodMid', { pos: [-4.0, uy + 1.1, -4.0] });
-  b.bevelBox(2.0, 0.04, 1.6, 0.01, 'meadowFlowerC', { pos: [0.0, uy + 0.08, 0.6] });
 
   // No groundY here: this mesh IS the floor, so grounding it would darken the
   // very surface the room is lit through. Furniture still grounds against it.
