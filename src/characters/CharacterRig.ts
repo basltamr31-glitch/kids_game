@@ -1,4 +1,4 @@
-import { Group, Mesh, Object3D, SphereGeometry, type Material } from 'three';
+import { Group, Matrix4, Mesh, Object3D, SphereGeometry, Vector3, type Material } from 'three';
 import { PartBuilder } from '../art/MeshKit';
 import { M } from '../art/Materials';
 import { Face, type Expression, type FaceStyle } from './Face';
@@ -145,6 +145,19 @@ export class CharacterRig {
    */
   private strideLength: number;
 
+  /**
+   * Where each foot is planted while it carries the weight, in world space.
+   *
+   * Joint-angle animation makes the foot trace an arc, so the planted foot
+   * slides backwards under the character. Holding the contact point and
+   * solving the leg to reach it is what stops it. Null means that foot is
+   * swinging and the clip has it.
+   */
+  private plantL: Vector3 | null = null;
+  private plantR: Vector3 | null = null;
+  private thighLength = 0;
+  private shinLength = 0;
+
   private faceMesh: Mesh;
 
   /** Additive look-at, in radians relative to the chest. */
@@ -170,8 +183,16 @@ export class CharacterRig {
     this.scaleFactor = s;
     // Hip to ankle, from the joint offsets below, times the two-step reach of
     // the swing amplitude used by the walk clip.
-    const legLength = (0.34 + 0.32) * s;
-    this.strideLength = 4 * legLength * Math.sin(WALK_SWING);
+    this.thighLength = 0.34 * s;
+    this.shinLength = 0.32 * s;
+    const legLength = this.thighLength + this.shinLength;
+    // Nine tenths of the geometric stride, deliberately.
+    //
+    // At the full figure the body travels exactly as far in one stance as the
+    // leg can span from the hip, which leaves no margin at all: the moment the
+    // body bobs, the planted foot is out of reach and gets dragged. Shortening
+    // the assumed stride raises the cadence a little and buys the room back.
+    this.strideLength = 4 * legLength * Math.sin(WALK_SWING) * 0.88;
 
     const faceStyle: FaceStyle = {
       skin: look.skin,
@@ -428,6 +449,8 @@ export class CharacterRig {
     j.footL.rotation.x = p.footL;
     j.footR.rotation.x = p.footR;
 
+    this.plantFeet(speed);
+
     /* --- secondary motion: hair lags behind the head --- */
     const yawNow = j.head.rotation.y + this.group.rotation.y;
     const yawDelta = (yawNow - this.lastYaw) / Math.max(dt, 0.001);
@@ -450,6 +473,110 @@ export class CharacterRig {
     } else {
       this.lastStrideSign = 0;
     }
+  }
+
+  /**
+   * Holds the weight-bearing foot still and bends the leg to suit.
+   *
+   * Solved in the thigh's PARENT space rather than in the body's yaw frame.
+   * That distinction is the whole thing: the leg chain hangs under hip yaw,
+   * hip roll and spine roll, so treating it as a flat problem in the character's
+   * heading — which is what a first attempt at this did — produces angles that
+   * are wrong by however much the hips happen to be twisting, and the foot
+   * slides further than it did without any of it.
+   *
+   * Sign convention, measured rather than assumed: a positive thigh pitch
+   * swings the foot BACKWARD, and a positive shin angle bends the knee.
+   */
+  private plantFeet(speed: number): void {
+    const walking = this.clip === 'walk' || this.clip === 'run';
+    const weight = walking ? clamp01((speed - 0.5) / 1.3) : 0;
+    if (weight <= 0.01) {
+      this.plantL = null;
+      this.plantR = null;
+      return;
+    }
+
+    const j = this.joints;
+    // Decided from the stride phase, not from the pose.
+    //
+    // The pose channels are damped, so near the crossover the two thigh pitches
+    // sit within a hair of each other and the comparison chatters frame to
+    // frame. Every flip re-planted the foot at wherever it happened to be, so
+    // it never held anything: twelve plants in sixty planted frames. The phase
+    // is monotonic and crosses zero exactly twice a cycle.
+    // Weight is borne while the thigh swings BACKWARD, which is the half of
+    // the cycle where its pitch is increasing — cos, not sin. Using sin picked
+    // the half where the leg is merely behind the body, which is half stance
+    // and half swing, so the plant was taken mid-air and dragged.
+    const leftPlanted = Math.cos(this.phase) > 0;
+
+    this.plantOne(j.thighL, j.shinL, j.footL, leftPlanted, 'L', weight);
+    this.plantOne(j.thighR, j.shinR, j.footR, !leftPlanted, 'R', weight);
+  }
+
+  private plantOne(
+    thigh: Object3D,
+    shin: Object3D,
+    foot: Object3D,
+    planted: boolean,
+    side: 'L' | 'R',
+    weight: number,
+  ): void {
+    if (!planted) {
+      if (side === 'L') this.plantL = null;
+      else this.plantR = null;
+      return;
+    }
+
+    let target = side === 'L' ? this.plantL : this.plantR;
+    if (!target) {
+      // Just took the weight: remember exactly where it came down.
+      //
+      // Not a computed rest height — that was tried, and being about 0.1m out
+      // put the target beyond the leg's 0.5m span from the first frame, so the
+      // solve clamped and the foot was dragged the whole way through stance.
+      // The foot's own position is by definition reachable.
+      foot.updateWorldMatrix(true, false);
+      target = new Vector3().setFromMatrixPosition(foot.matrixWorld);
+      if (side === 'L') this.plantL = target;
+      else this.plantR = target;
+      return;
+    }
+
+    const parent = thigh.parent;
+    if (!parent) return;
+    parent.updateWorldMatrix(true, false);
+    _inverse.copy(parent.matrixWorld).invert();
+
+    // Target in the thigh's own parent space, measured from the hip joint.
+    _local.copy(target).applyMatrix4(_inverse).sub(thigh.position);
+
+    const a = this.thighLength;
+    const b = this.shinLength;
+    const reach = Math.min(_local.length(), (a + b) * 0.995);
+    if (reach < 1e-4) return;
+
+    // Direction to the foot, positive meaning forward (+Z).
+    const aim = Math.atan2(_local.z, -_local.y);
+    // Interior angle between the thigh and the straight hip-to-foot line.
+    const open = Math.acos(clampRange((a * a + reach * reach - b * b) / (2 * a * reach)));
+    const knee = Math.PI - Math.acos(clampRange((a * a + b * b - reach * reach) / (2 * a * b)));
+
+    // Negated because positive pitch is backward; the knee leads forward of the
+    // hip-to-foot line, which is why `open` is added before negating.
+    const wantThigh = -(aim + open);
+
+    // Applied fully rather than eased toward.
+    //
+    // A stance lasts about five frames at a jog, and easing at 45% a frame
+    // never arrives in that time — the foot ended up tracking roughly half way
+    // between the clip and the plant, which is no better than not doing it. No
+    // pop results, because a fresh plant is taken at wherever the foot already
+    // is, so on its first frame the solve and the clip agree exactly. `weight`
+    // still fades the whole effect in with walking speed.
+    thigh.rotation.x += (wantThigh - thigh.rotation.x) * weight;
+    shin.rotation.x += (knee - shin.rotation.x) * weight;
   }
 
   dispose(): void {
@@ -523,6 +650,13 @@ function blendPose(target: Pose, other: Pose, amount: number): void {
 /* ------------------------------------------------------------------ */
 
 const sin = Math.sin;
+
+const _inverse = new Matrix4();
+const _local = new Vector3();
+
+function clampRange(value: number): number {
+  return value < -1 ? -1 : value > 1 ? 1 : value;
+}
 
 
 /** Thigh swing amplitude of the walk cycle, in radians. Stride length follows. */
