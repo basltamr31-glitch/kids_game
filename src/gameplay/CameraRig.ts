@@ -1,6 +1,7 @@
 import { PerspectiveCamera, Vector3, Spherical, MathUtils } from 'three';
 import { damp, clamp } from '../core/Rng';
 import type { Terrain } from '../world/Terrain';
+import type { CollisionWorld } from '../world/Collision';
 import type { FormFactor } from '../core/DeviceProfile';
 
 /**
@@ -42,6 +43,8 @@ export type CameraMode = 'follow' | 'focus' | 'cinematic';
 const INDOOR_RADIUS = 4.6;
 const INDOOR_PHI = MathUtils.degToRad(66);
 
+const _shortened = new Vector3();
+
 export class CameraRig {
   readonly camera: PerspectiveCamera;
 
@@ -70,6 +73,9 @@ export class CameraRig {
    * Indoors the boom comes in and lifts to look down into the room.
    */
   private indoorBlend = 0;
+
+  /** Used to keep the child in view; set once the world exists. */
+  private collision: CollisionWorld | null = null;
 
 
   constructor(aspect: number, formFactor: FormFactor) {
@@ -138,6 +144,11 @@ export class CameraRig {
     return this.mode === 'focus';
   }
 
+  /** Handed the world's obstacles, so the camera can keep the child in view. */
+  setCollision(collision: CollisionWorld): void {
+    this.collision = collision;
+  }
+
   /**
    * Tells the rig whether the child is inside a building.
    * Driven from the same test that drives the cutaway, so the walls ghosting
@@ -204,7 +215,22 @@ export class CameraRig {
     this.lookAt.lerp(desired, 1 - Math.exp(-9 * dt));
 
     const offset = new Vector3().setFromSpherical(this.spherical);
-    const position = new Vector3().addVectors(this.lookAt, offset);
+    let position = new Vector3().addVectors(this.lookAt, offset);
+
+    // Pull in until the child is actually visible.
+    //
+    // Indoors there is furniture between the camera and the child constantly —
+    // stand behind the dining table and a fixed boom puts a table top across
+    // their face. Shortening the boom rather than fading the furniture keeps
+    // the room solid and readable, and it is the same thing a camera operator
+    // would do: step closer until you can see them.
+    if (this.collision && this.indoorBlend > 0.01) {
+      const clear = this.firstClearDistance(this.lookAt, offset);
+      if (clear < 1) {
+        _shortened.copy(offset).multiplyScalar(Math.max(0.35, clear));
+        position = new Vector3().addVectors(this.lookAt, _shortened);
+      }
+    }
 
     // Keep the camera above the ground with a comfortable clearance; if the
     // terrain pushes up behind the child, shorten the boom instead of clipping.
@@ -229,6 +255,38 @@ export class CameraRig {
 
     this.camera.position.copy(position);
     this.camera.lookAt(this.lookAt);
+  }
+
+  /**
+   * Fraction of the boom that is clear of obstacles, 0..1.
+   *
+   * Marched rather than swept: the camera only needs to know how far back it
+   * can sit, and a handful of samples along a 5m boom is both accurate enough
+   * and far cheaper than a real shape cast.
+   */
+  private firstClearDistance(lookAt: Vector3, offset: Vector3): number {
+    const collision = this.collision;
+    if (!collision) return 1;
+
+    const length = Math.hypot(offset.x, offset.z);
+    if (length < 0.01) return 1;
+
+    // Step finely enough to catch a wall. The chalet's walls are 0.6m thick, so
+    // sampling every 0.65m can straddle one entirely and put the camera outside
+    // the house looking at the back of it — which is exactly what happened.
+    const steps = Math.max(8, Math.ceil(length / 0.18));
+    for (let i = 1; i <= steps; i++) {
+      const t = i / steps;
+      const x = lookAt.x + offset.x * t;
+      const z = lookAt.z + offset.z * t;
+      // Only walls and furniture; an animal wandering past must not yank the
+      // camera in.
+      if (collision.blocks(x, z, 0.3, 'animal')) {
+        // Stop just short of whatever was hit.
+        return Math.max(0.3, (i - 1) / steps);
+      }
+    }
+    return 1;
   }
 
   /** Camera-relative forward/right on the ground plane, for movement input. */

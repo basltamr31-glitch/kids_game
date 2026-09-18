@@ -50,6 +50,8 @@ export interface HouseState {
   frontDoor: Hinge;
   /** The front door as a physical object: solid when shut, a gap when open. */
   door: Door;
+  /** Footprints of the large furniture, in house-local space. */
+  solidFurniture: [number, number, number, number][];
   /** Per-frame house behaviour. */
   update: (dt: number, childPosition: Vector3) => void;
 }
@@ -133,6 +135,20 @@ export function buildHouseInteractions(
 
   const living = buildLivingRoom(registry);
   living.group.position.set(-4.2, 0, 2.8);
+
+  /* ---------------- furniture you cannot walk through ---------------- */
+  // Registered in house-local space and offset by the house's own placement,
+  // which the caller supplies. Only the big pieces: a child squeezing past a
+  // chair is fine, a child standing inside the kitchen counter is not.
+  const solid: [number, number, number, number][] = [
+    // [x, z, halfX, halfZ] in house-local metres
+    [-4.0, -4.9, 2.6, 0.45],   // kitchen counter run
+    [-1.4, -1.0, 1.5, 0.75],   // dining table
+    [4.6, -3.6, 1.1, 0.95],    // bed
+    [4.6, -1.4, 0.55, 0.35],   // wardrobe
+    [-4.2, 3.0, 1.35, 0.5],    // sofa
+    [-6.3, 1.2, 0.4, 1.05],    // fireplace
+  ];
   group.add(living.group);
 
   for (const [key, node] of [...kitchen.nodes, ...dining.nodes, ...bathroom.nodes,
@@ -724,6 +740,7 @@ export function buildHouseInteractions(
     bedtimeSteps,
     frontDoor: door.hinge,
     door: frontDoor,
+    solidFurniture: solid,
     update: (dt, childPosition) => {
       void childPosition;
       frontDoor.update(dt);

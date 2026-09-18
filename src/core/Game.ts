@@ -224,6 +224,15 @@ export class Game {
       this.scene.add(this.house.group);
       // The door registered its collider at the origin; now that the house is
       // placed, move it to where the doorway actually is.
+      // Furniture is solid too, now that the house has a position to offset by.
+      for (const [fx, fz, hx, hz] of this.house.solidFurniture) {
+        this.world.collision.addBox(
+          chalet.centre.x + fx, chalet.centre.z + fz, hx, hz, 0, 'furniture',
+        );
+      }
+      this.world.nav.rebuild();
+
+      this.cameraRig.setCollision(this.world.collision);
       this.player.setDoor(this.house.door);
       this.player.onDoorOpened = () => this.ctx.audio.play('door');
       this.house.door.placeAt(
