@@ -9,6 +9,7 @@ import type { CharacterAppearance } from '../save/SaveSchema';
 import { LAYOUT } from '../world/WorldBuilder';
 import type { CollisionWorld } from '../world/Collision';
 import type { NavGrid } from '../world/NavGrid';
+import type { Door } from '../world/Door';
 import { isInsideHouse, routeThroughDoor } from '../world/HouseNav';
 import type { Seat } from './interact/Interactable';
 
@@ -48,6 +49,15 @@ export class Player {
   private terrain: Terrain;
   private collision: CollisionWorld;
   private nav: NavGrid | null = null;
+
+  /** The door the child will meet on the way, if any. */
+  private doorAhead: Door | null = null;
+  private openingDoor = 0;
+  /** Where this walk ends, so we can tell passing through from walking up to. */
+  private finalDestination = new Vector3();
+
+  /** Raised when the child opens a door themselves; drives the sound. */
+  onDoorOpened: (() => void) | null = null;
   private scripted = false;
 
   /** True while a prop is in the hand, so idle holds the carry pose. */
@@ -82,6 +92,11 @@ export class Player {
     this.nav = nav;
   }
 
+  /** The door the child should open rather than walk into. */
+  setDoor(door: Door): void {
+    this.doorAhead = door;
+  }
+
   get isMoving(): boolean {
     return this.speed > 0.08;
   }
@@ -107,6 +122,7 @@ export class Player {
     const destination = this.findWalkablePoint(point);
     this.path = this.routeTo(destination);
     this.moveTarget = this.path.shift() ?? destination;
+    this.finalDestination.copy(destination);
   }
 
   /**
@@ -282,6 +298,33 @@ export class Player {
       this.onArrive = null;
       callback?.();
       return;
+    }
+
+    // A closed door on the way: stop, open it, then carry on. People open
+    // doors they are walking through, and putting it here rather than in every
+    // routine means no routine can forget — which was the old proximity-open
+    // rule's only real virtue, kept without the door flying open at anyone who
+    // wanders past.
+    if (this.doorAhead && !this.doorAhead.isOpen) {
+      const door = this.doorAhead;
+      // Only when they are going THROUGH it. Walking up to a door in order to
+      // open or shut it deliberately must not trigger the same rule, or the
+      // door opens itself on approach and the child's own action then shuts
+      // it again.
+      const passingThrough =
+        isInsideHouse(this.finalDestination.x, this.finalDestination.z) !==
+        isInsideHouse(this.position.x, this.position.z);
+      if (passingThrough && door.nearDoorway(this.position.x, this.position.z, 1.7)) {
+        this.speed = damp(this.speed, 0, 14, dt);
+        this.openingDoor -= dt;
+        if (this.openingDoor <= 0) {
+          this.rig.play('openDoor', true);
+          door.setOpen(true);
+          this.onDoorOpened?.();
+          this.openingDoor = 0.6;
+        }
+        return;
+      }
     }
 
     // Ease in, and ease out over the last metre so the stop is not abrupt.

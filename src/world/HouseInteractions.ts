@@ -1,4 +1,6 @@
 import { Group, Object3D, Vector3, type Material } from 'three';
+import { Door } from './Door';
+import type { CollisionWorld } from './Collision';
 import {
   Hinge,
   Prop,
@@ -46,10 +48,9 @@ export interface HouseState {
   /** Bedtime: wash, brush, then bed. */
   bedtimeSteps: () => InteractStep[];
   frontDoor: Hinge;
-  /**
-   * Per-frame house behaviour. Currently just the front door, which opens as
-   * the child comes up to it and closes behind them.
-   */
+  /** The front door as a physical object: solid when shut, a gap when open. */
+  door: Door;
+  /** Per-frame house behaviour. */
   update: (dt: number, childPosition: Vector3) => void;
 }
 
@@ -105,6 +106,8 @@ export function buildHouseInteractions(
   isSeated: () => boolean,
   /** The chalet's shell material, so the front door ghosts with the wall. */
   shellMaterial: Material,
+  collision: CollisionWorld,
+  getPlayerPosition: () => Vector3,
 ): HouseState {
   const group = new Group();
   group.name = 'house-interior-live';
@@ -144,6 +147,47 @@ export function buildHouseInteractions(
   door.group.position.set(0, 0.72, 5.42);
   group.add(door.group);
   nodes.set('frontDoor', door.pivot);
+
+  // The door as a physical object. Its world position comes from the group's
+  // placement, which the caller sets, so this is resolved after the group is
+  // parented rather than guessed here.
+  const frontDoor = new Door({
+    hinge: door.hinge,
+    collision,
+    centre: new Vector3(0, 0, 0),
+    halfWidth: 0.95,
+    halfDepth: 0.3,
+    rot: 0,
+  });
+
+  // Tapping it opens or shuts it, with the child standing in front and
+  // reaching for the handle. This is the difference between a door that moves
+  // and a door the child opens.
+  registry.add({
+    id: 'house.frontDoor',
+    node: door.pivot,
+    standAt: worldOf(door.pivot, new Vector3()),
+    bubbleHeight: 1.5,
+    area: 'farmyard',
+    enabled: true,
+    labelKey: () => (frontDoor.isOpen ? 'interact.closedoor' : 'interact.opendoor'),
+    verb: () => 'open',
+    run: () => {
+      const doorPoint = frontDoor.centre;
+      const wantOpen = !frontDoor.isOpen;
+      // Stand on whichever side they are already on; walking round a door to
+      // open it is exactly the kind of thing that reads as a bug.
+      const fromInside = getPlayerPosition().z < doorPoint.z;
+      const stand = new Vector3(doorPoint.x, 0, doorPoint.z + (fromInside ? -1.25 : 1.25));
+      return [
+        { kind: 'walkTo', point: stand, face: doorPoint.clone() },
+        { kind: 'animate', clip: 'openDoor', duration: 0.7, sound: 'door' },
+        // The state is decided now, when the child is told to do it, rather
+        // than on arrival: by then anything could have moved the door.
+        { kind: 'call', fn: () => frontDoor.setOpen(wantOpen) },
+      ];
+    },
+  });
 
   /* ---------------- starting props ---------------- */
   // The house begins the day stocked: plates on the counter, a loaf on the
@@ -679,16 +723,10 @@ export function buildHouseInteractions(
     breakfastSteps,
     bedtimeSteps,
     frontDoor: door.hinge,
+    door: frontDoor,
     update: (dt, childPosition) => {
-      // The door has to answer to the child, not to each routine. Routines
-      // walk through it constantly — to breakfast, to bed, out to the animals
-      // — and any of them could forget to open it, at which point the child
-      // walks through a solid door. Hysteresis stops it flapping when they
-      // stand on the threshold.
-      const distance = childPosition.distanceTo(worldOf(door.pivot, _v));
-      if (distance < 2.4) door.hinge.set(true);
-      else if (distance > 3.2) door.hinge.set(false);
-      door.hinge.update(dt);
+      void childPosition;
+      frontDoor.update(dt);
     },
   };
 }

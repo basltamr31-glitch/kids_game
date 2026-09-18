@@ -76,6 +76,28 @@ export class NavGrid {
     }
   }
 
+  /**
+   * Re-tests one rectangle of cells.
+   *
+   * A door opening changes a few square metres, and rebuilding the whole grid
+   * for that would be silly. Bounds are in world metres.
+   */
+  refreshArea(minX: number, minZ: number, maxX: number, maxZ: number): void {
+    const ix0 = Math.max(0, this.cellX(minX));
+    const ix1 = Math.min(DIM - 1, this.cellX(maxX));
+    const iz0 = Math.max(0, this.cellZ(minZ));
+    const iz1 = Math.min(DIM - 1, this.cellZ(maxZ));
+    for (let iz = iz0; iz <= iz1; iz++) {
+      for (let ix = ix0; ix <= ix1; ix++) {
+        const x = this.worldX(ix);
+        const z = this.worldZ(iz);
+        const solid =
+          !this.terrain.isWalkable(x, z) || this.collision.blocks(x, z, CLEARANCE, 'animal');
+        this.blocked[iz * DIM + ix] = solid ? 1 : 0;
+      }
+    }
+  }
+
   private worldX(ix: number): number {
     return ix * CELL - EXTENT + CELL * 0.5;
   }

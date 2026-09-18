@@ -216,10 +216,22 @@ export class Game {
       () => this.runner.carriedProp,
       () => this.player.isSeated,
       chalet.result.shellMaterial,
+      this.world.collision,
+      () => this.player.position,
     );
     if (chalet) {
       this.house.group.position.copy(chalet.centre);
       this.scene.add(this.house.group);
+      // The door registered its collider at the origin; now that the house is
+      // placed, move it to where the doorway actually is.
+      this.player.setDoor(this.house.door);
+      this.player.onDoorOpened = () => this.ctx.audio.play('door');
+      this.house.door.placeAt(
+        chalet.centre.x,
+        chalet.centre.z + 5.42,
+        this.world.collision,
+        this.world.nav,
+      );
     }
 
     // The farm's interactables live in world space already, so its group

@@ -23,6 +23,8 @@ export type ColliderTag = 'building' | 'fence' | 'tree' | 'furniture' | 'prop' |
 
 interface CircleCollider {
   kind: 'circle';
+  /** Switched off while a door stands open. */
+  off?: boolean;
   x: number;
   z: number;
   r: number;
@@ -31,6 +33,7 @@ interface CircleCollider {
 
 interface BoxCollider {
   kind: 'box';
+  off?: boolean;
   x: number;
   z: number;
   halfX: number;
@@ -42,6 +45,7 @@ interface BoxCollider {
 
 interface SegmentCollider {
   kind: 'segment';
+  off?: boolean;
   x1: number;
   z1: number;
   x2: number;
@@ -79,6 +83,12 @@ export class CollisionWorld {
     this.insert({ kind: 'circle', x, z, r, tag });
   }
 
+  /**
+   * Adds a box and returns a handle.
+   *
+   * The handle exists for things that stop being solid: a door is a wall when
+   * it is shut and a gap when it is open, and it is the same object either way.
+   */
   addBox(
     x: number,
     z: number,
@@ -86,8 +96,33 @@ export class CollisionWorld {
     halfZ: number,
     rot: number,
     tag: ColliderTag,
-  ): void {
-    this.insert({ kind: 'box', x, z, halfX, halfZ, rot, tag });
+  ): number {
+    return this.insert({ kind: 'box', x, z, halfX, halfZ, rot, tag });
+  }
+
+  /**
+   * Moves a box collider, re-indexing it.
+   *
+   * Buildings are constructed at the origin and positioned afterwards, so the
+   * parts of them that register colliders need a way to catch up.
+   */
+  moveBox(handle: number, x: number, z: number): void {
+    const c = this.colliders[handle];
+    if (!c || c.kind !== 'box') return;
+    c.x = x;
+    c.z = z;
+    // The grid holds indices by cell, so a move means a rebuild. This happens
+    // once per door at start-up.
+    const all = this.colliders.slice();
+    this.colliders = [];
+    this.grid.clear();
+    for (const collider of all) this.insert(collider);
+  }
+
+  /** Turns one collider on or off without rebuilding the index. */
+  setEnabled(handle: number, enabled: boolean): void {
+    const c = this.colliders[handle];
+    if (c) c.off = !enabled;
   }
 
   addSegment(
@@ -141,7 +176,7 @@ export class CollisionWorld {
     return this.colliders.length;
   }
 
-  private insert(c: Collider): void {
+  private insert(c: Collider): number {
     const index = this.colliders.push(c) - 1;
     const [minX, minZ, maxX, maxZ] = bounds(c);
     const cx0 = Math.floor(minX / CELL);
@@ -159,6 +194,7 @@ export class CollisionWorld {
         list.push(index);
       }
     }
+    return index;
   }
 
   /* ---------------- querying ---------------- */
@@ -181,7 +217,7 @@ export class CollisionWorld {
         if (!list) continue;
         for (const index of list) {
           const c = this.colliders[index];
-          if (c.tag === ignore) continue;
+          if (c.off || c.tag === ignore) continue;
           if (overlaps(c, x, z, radius)) return true;
         }
       }
