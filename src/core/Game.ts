@@ -128,7 +128,7 @@ export class Game {
 
     this.qualityMonitor = new AdaptiveQualityMonitor(
       () => this.ctx.quality.tier,
-      (tier) => this.applyQuality(tier, true),
+      (tier, reason) => this.applyQuality(tier, reason),
     );
 
     this.scene.add(this.actorRoot);
@@ -687,7 +687,7 @@ export class Game {
         ctx.save.updateSettings((s) => {
           s.qualityOverride = tier;
         });
-        this.applyQuality(tier ?? detectQualityTier(), false);
+        this.applyQuality(tier ?? detectQualityTier(), null);
       },
       onLocaleChange: (locale) => {
         ctx.loc.setLocale(locale);
@@ -775,9 +775,16 @@ export class Game {
   /* Quality                                                             */
   /* ------------------------------------------------------------------ */
 
-  private applyQuality(tier: import('./DeviceProfile').QualityTier, automatic: boolean): void {
+  /**
+   * `reason` is set when the adaptive monitor asked for this, and carries the
+   * numbers it decided on; a parent choosing a tier by hand passes null.
+   */
+  private applyQuality(
+    tier: import('./DeviceProfile').QualityTier,
+    reason: string | null,
+  ): void {
     const ctx = this.ctx;
-    if (automatic && ctx.save.settings.qualityOverride !== null) return;
+    if (reason !== null && ctx.save.settings.qualityOverride !== null) return;
 
     ctx.quality = qualityFor(tier);
     this.renderer.shadowMap.enabled = ctx.quality.shadows;
@@ -793,8 +800,8 @@ export class Game {
       ctx.save.save.season,
     );
 
-    if (automatic) {
-      console.info(`[Quality] stepped down to "${tier}" after sustained low frame rate`);
+    if (reason !== null) {
+      console.info(`[Quality] stepped down to "${tier}": ${reason}`);
     }
   }
 

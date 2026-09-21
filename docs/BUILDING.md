@@ -33,7 +33,7 @@ localStorage.clear()               // start a brand new farm
 
 ```bash
 npm run typecheck   # tsc --noEmit
-npm test            # vitest, 51 tests
+npm test            # vitest, 65 tests
 npm run build       # typecheck + production bundle into dist/
 npm run preview     # serve the production bundle
 npm run icons       # regenerate launcher icons from tools/generate-icons.mjs

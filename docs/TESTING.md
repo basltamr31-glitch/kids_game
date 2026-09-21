@@ -1,7 +1,7 @@
 # Testing
 
 ```bash
-npm test          # 51 tests, ~2s
+npm test          # 65 tests, ~3s
 npm run typecheck # strict TS, noUnusedLocals, noImplicitOverride
 ```
 
@@ -79,6 +79,29 @@ The place where a typo becomes a soft lock rather than a compile error.
   a purchase persists and fires its event exactly once, cancelling grants
   nothing, and restore works from a fresh instance
 
+### `tests/quality.test.ts` — 12 tests
+
+The adaptive monitor is the only thing in the engine that can permanently
+change how the game looks without anybody asking it to, so the tests are
+written as device descriptions rather than as assertions about numbers — that
+is how it fails, by drawing the wrong conclusion about a plausible device.
+
+- a healthy 60 Hz device is left alone
+- **a healthy 30 Hz device is left alone** — every one of its frames is over the
+  old absolute limit, and it used to lose its shadows within twenty seconds of
+  boot on hardware that was not struggling at all
+- one bad window among good ones is a hitch, not a verdict (replayed from a
+  real session: a steady 33ms with one four-second stretch of 50ms frames)
+- a 60 Hz device genuinely rendering at 15 fps is stepped down
+- a device whose frames are too long to even measure is stepped down rather
+  than dismissed as a stalled tab
+- tab stalls and the negative delta a resume can produce are ignored
+- it never steps below `low`, and never more than twice in a session
+- it reports the numbers it decided on
+- `reset()` forgets everything, including a half-armed downgrade
+- every tier a downgrade can reach keeps shadows except the floor
+
+
 ## What is not covered by automated tests
 
 Honest gaps:
@@ -90,7 +113,9 @@ Honest gaps:
 - **Audio.** The synthesis graph is not asserted. Verified by ear.
 - **Touch input.** `InputManager` gesture disambiguation is not unit-tested;
   tap-to-move was verified manually in the browser.
-- **Real device performance.** Numbers below are desktop-measured.
+- **Real device performance.** Numbers below are desktop-measured. What *is*
+  covered is the monitor's judgement, which is the part that was getting real
+  devices wrong; the frame costs it judges are still not measured on one.
 - **The Capacitor layer.** `CapacitorPlatform` is exercised only by running the
   app; its fallbacks are structured so a missing plugin degrades to the web
   behaviour rather than crashing.
@@ -134,6 +159,14 @@ Run before any release build.
 - [ ] Mum and Dad move to different places as the phase changes
 - [ ] they wave when the child comes close
 - [ ] in rain they move to their indoor alternative
+
+**Quality**
+- [ ] after a few minutes of play the console has not logged `[Quality] stepped
+      down` — and if it has, the reason it gives should describe the device you
+      are actually holding
+- [ ] the child, the animals and the buildings cast shadows on the ground; if
+      the scene looks flat and everything appears to float, the tier has
+      dropped to `low`
 
 **Weather and time**
 - [ ] sky, light and fog change across the day
