@@ -30,6 +30,16 @@ Store to Google; the app never sees a payment detail.
 The `INTERNET` permission is declared for that reason alone. The manifest
 comments say so, so nobody later assumes it is free to use.
 
+**Read aloud.** With "Read aloud" on (the default, switchable in the Parent
+Area), task names, parents' lines and reward cards are spoken by the device's
+own text-to-speech engine: `speechSynthesis` on the web, and the system engine
+through `@capacitor-community/text-to-speech` on Android. The only text ever
+spoken is the game's own fixed strings; there is no free-text input to leak. On
+the web build only on-device voices are chosen. The Android system engine uses
+its installed voice data and works in airplane mode; if a parent has set the
+system engine to prefer network voices, that is a device-wide setting outside
+the app.
+
 **Airplane mode test:** launch, play, complete a day, close, relaunch. Everything
 works. The only affected surface is the purchase button, which returns a polite
 "a connection is needed just for this purchase" (`store.offline`).

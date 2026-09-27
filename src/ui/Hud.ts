@@ -4,7 +4,7 @@ import type { GameContext } from '../core/GameContext';
 import type { InteractionSystem } from '../gameplay/InteractionSystem';
 import type { DayDirector } from '../gameplay/DayDirector';
 import type { CameraRig } from '../gameplay/CameraRig';
-import { milestonesReachedAt } from '../content';
+import { ACTIVITIES_BY_ID, milestonesReachedAt } from '../content';
 import { rankSuggestions, suggestionHeading, type SuggestionContext } from '../gameplay/Suggestions';
 
 import type { Weather } from '../save/SaveSchema';
@@ -171,6 +171,13 @@ export class Hud {
       this.refreshTasks();
     });
 
+    // Saying what is about to happen confirms the tap for a child who could
+    // not read the button they pressed.
+    bus.on('activity:started', ({ activityId }) => {
+      const activity = ACTIVITIES_BY_ID.get(activityId);
+      if (activity) this.say(this.ctx.loc.t(activity.titleKey));
+    });
+
     bus.on('activity:completed', () => {
       this.refreshTasks();
       this.pulseHearts();
@@ -185,6 +192,17 @@ export class Hud {
       this.showToast('toast.discovery', '🔎');
       void id;
     });
+  }
+
+  /* ---------------- read aloud ---------------- */
+
+  /**
+   * Says a line with the device's offline voice, when the parent has left
+   * "read aloud" on. Pitch gives each speaker a voice of their own.
+   */
+  say(text: string, pitch = 1.1): void {
+    if (!this.ctx.save.settings.readAloud) return;
+    this.ctx.platform.speak(text, this.ctx.loc.locale, pitch);
   }
 
   /* ---------------- chips ---------------- */
@@ -253,7 +271,32 @@ export class Hud {
               title,
               text: activity.icon,
             });
+      // Press and hold to hear what a picture means without starting it.
+      let held = false;
+      let holdTimer: number | null = null;
+      button.addEventListener('pointerdown', () => {
+        held = false;
+        holdTimer = window.setTimeout(() => {
+          held = true;
+          this.ctx.platform.haptic('light');
+          this.say(title);
+          button.classList.add('task--heard');
+          window.setTimeout(() => button.classList.remove('task--heard'), 600);
+        }, 450);
+      });
+      const cancelHold = (): void => {
+        if (holdTimer !== null) window.clearTimeout(holdTimer);
+        holdTimer = null;
+      };
+      button.addEventListener('pointerup', cancelHold);
+      button.addEventListener('pointercancel', cancelHold);
+      button.addEventListener('pointerleave', cancelHold);
+      button.addEventListener('contextmenu', (event) => event.preventDefault());
       onTap(button, () => {
+        if (held) {
+          held = false;
+          return;
+        }
         // Starting from the list is identical to tapping the world bubble: the
         // activity's first step walks the child there. Nothing teleports.
         // The anchor lookup is a guard — an animal that somehow has no position
@@ -407,6 +450,12 @@ export class Hud {
   }
 
   showSpeech(actor: string, text: string, seconds: number): void {
+    // Voiced even with subtitles off: hearing Mum is not the same as reading her.
+    if (this.ctx.save.settings.readAloud) {
+      this.say(text, actor === 'father' ? 0.8 : actor === 'mother' ? 1.2 : 1.35);
+    } else {
+      this.ctx.audio.babble(actor, text);
+    }
     if (!this.ctx.save.settings.subtitles) return;
 
     if (this.activeSpeech) {

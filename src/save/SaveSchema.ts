@@ -122,6 +122,8 @@ export interface SettingsData {
   uiScale: number;
   subtitles: boolean;
   reducedMotion: boolean;
+  /** Reads task names and prompts aloud for children who cannot read yet. */
+  readAloud: boolean;
   /** Premium entitlement cache. Authoritative source is always the store. */
   premiumUnlocked: boolean;
 }
@@ -176,6 +178,7 @@ export function createDefaultSettings(deviceLocale: string): SettingsData {
     uiScale: 1,
     subtitles: true,
     reducedMotion: false,
+    readAloud: true,
     premiumUnlocked: false,
   };
 }

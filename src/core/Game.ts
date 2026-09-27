@@ -503,6 +503,7 @@ export class Game {
     this.dayEnding = true;
     this.ui.setFade(true);
     this.ctx.audio.play('sleep');
+    this.ctx.audio.playLullaby();
 
     window.setTimeout(() => {
       const summary = this.director.endDay();
@@ -780,6 +781,7 @@ export class Game {
 
     window.setTimeout(() => {
       this.ctx.audio.play('discovery');
+      this.hud.say(this.ctx.loc.t(`milestone.${milestone.id}`));
       const wearable = reward.kind === 'hat' || reward.kind === 'outfit';
       const screen = buildMilestoneScreen(this.ctx, milestone, {
         onTryOn: wearable

@@ -148,6 +148,7 @@
   "parent.area.quality.high": "Best looking",
   "parent.area.quality.low": "Battery saver",
   "parent.area.quality.medium": "Balanced",
+  "parent.area.readaloud": "Read aloud",
   "parent.area.reducedmotion": "Reduce motion",
   "parent.area.reset": "Start a new farm",
   "parent.area.reset.confirm": "This erases all progress. Are you sure?",

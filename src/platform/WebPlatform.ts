@@ -53,6 +53,33 @@ export class WebPlatform implements IPlatform {
     }
   }
 
+  speak(text: string, lang: string, pitch = 1.1): void {
+    const synth = typeof window !== 'undefined' ? window.speechSynthesis : undefined;
+    if (!synth || typeof SpeechSynthesisUtterance === 'undefined') return;
+    try {
+      synth.cancel();
+      const utterance = new SpeechSynthesisUtterance(text);
+      utterance.lang = lang;
+      // A touch slow and bright: this is read to a four-year-old.
+      utterance.rate = 0.9;
+      utterance.pitch = pitch;
+      // Only voices on the device: a network voice would send the text away.
+      const local = synth.getVoices().find((v) => v.localService && v.lang.startsWith(lang.slice(0, 2)));
+      if (local) utterance.voice = local;
+      synth.speak(utterance);
+    } catch {
+      /* no voice here */
+    }
+  }
+
+  stopSpeaking(): void {
+    try {
+      window.speechSynthesis?.cancel();
+    } catch {
+      /* ignore */
+    }
+  }
+
   haptic(style: HapticStyle): void {
     if (!('vibrate' in navigator)) return;
     const patterns: Record<HapticStyle, number | number[]> = {

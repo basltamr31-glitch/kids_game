@@ -803,6 +803,12 @@ export function buildParentAreaScreen(ctx: GameContext, handlers: ParentAreaHand
         handlers.onUiScaleChange(scale);
       },
     ),
+    toggleRow(ctx, 'parent.area.readaloud', settings.readAloud, (value) => {
+      ctx.save.updateSettings((s) => {
+        s.readAloud = value;
+      });
+      if (!value) ctx.platform.stopSpeaking();
+    }),
     toggleRow(ctx, 'parent.area.subtitles', settings.subtitles, (value) => {
       ctx.save.updateSettings((s) => {
         s.subtitles = value;

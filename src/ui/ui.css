@@ -355,6 +355,16 @@ body {
   transform: scale(0.97);
 }
 
+.task {
+  /* Press-and-hold reads the task aloud; stop iOS offering to copy it. */
+  -webkit-touch-callout: none;
+}
+
+/* Held long enough to be read aloud. */
+.task.task--heard {
+  box-shadow: 0 0 0 calc(var(--u) * 0.25) var(--blue);
+}
+
 .task__icon {
   font-size: calc(var(--u) * 1.35);
   flex: 0 0 auto;

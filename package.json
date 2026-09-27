@@ -20,6 +20,7 @@
     "icons": "node tools/generate-icons.mjs"
   },
   "dependencies": {
+    "@capacitor-community/text-to-speech": "^6.1.0",
     "@capacitor/android": "^7.0.0",
     "@capacitor/app": "^7.0.0",
     "@capacitor/core": "^7.0.0",

@@ -43,4 +43,12 @@ export interface IPlatform {
 
   /** Device language as a BCP-47-ish tag, e.g. "de" or "de-CH". */
   getPreferredLanguage(): string;
+
+  /**
+   * Reads a short line aloud with the device's own offline voice, for players
+   * who cannot read yet. Silently does nothing where no voice is available;
+   * nothing is ever sent off the device.
+   */
+  speak(text: string, lang: string, pitch?: number): void;
+  stopSpeaking(): void;
 }
