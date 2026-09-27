@@ -4,6 +4,7 @@ import type { GameContext } from '../core/GameContext';
 import type { InteractionSystem } from '../gameplay/InteractionSystem';
 import type { DayDirector } from '../gameplay/DayDirector';
 import type { CameraRig } from '../gameplay/CameraRig';
+import { milestonesReachedAt } from '../content';
 import { rankSuggestions, suggestionHeading, type SuggestionContext } from '../gameplay/Suggestions';
 
 import type { Weather } from '../save/SaveSchema';
@@ -60,6 +61,9 @@ export class Hud {
   private shownHearts = 0;
   private heartsInFlight = 0;
   private visible = true;
+  private bookButton!: HTMLElement;
+  /** Album size when the child last opened it; more than this shows a dot. */
+  private collectionSeen = 0;
   private projected = new Vector3();
 
   constructor(
@@ -98,8 +102,11 @@ export class Hud {
     });
     onTap(bookButton, () => {
       ctx.audio.play('tap');
+      this.collectionSeen = this.collectionSize();
+      this.bookButton.classList.remove('has-new');
       handlers.onBook();
     });
+    this.bookButton = bookButton;
 
     const menuButton = el('button', {
       class: 'btn btn--icon',
@@ -138,6 +145,7 @@ export class Hud {
       this.emoteLayer,
     ]);
 
+    this.collectionSeen = this.collectionSize();
     this.lastHearts = ctx.save.save.hearts;
     this.shownHearts = this.lastHearts;
     this.heartsValue.textContent = String(this.shownHearts);
@@ -275,10 +283,21 @@ export class Hud {
       this.lastHearts = hearts;
       if (gained > 0 && this.visible) this.launchHearts(gained);
     }
+    // Something new in the album: a dot on the book until it is opened.
+    const hasNew = this.collectionSize() > this.collectionSeen;
+    if (hasNew !== this.bookButton.classList.contains('has-new')) {
+      this.bookButton.classList.toggle('has-new', hasNew);
+    }
     if (this.heartsInFlight === 0 && this.shownHearts !== hearts) {
       this.shownHearts = hearts;
       this.heartsValue.textContent = String(hearts);
     }
+  }
+
+  /** Everything the album counts: finds, stickers and reached rewards. */
+  private collectionSize(): number {
+    const save = this.ctx.save.save;
+    return save.discoveries.length + save.stickers.length + milestonesReachedAt(save.hearts).length;
   }
 
   /**

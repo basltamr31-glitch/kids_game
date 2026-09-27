@@ -1,7 +1,14 @@
 import { el, onTap, removeAnimated } from './dom';
 import type { GameContext } from '../core/GameContext';
 import { SKIN_TONES, HAIR_COLORS, OUTFIT_PRIMARY } from '../art/Palette';
-import { DISCOVERIES, heartsForHat, heartsForOutfit, type Milestone } from '../content';
+import {
+  DISCOVERIES,
+  MILESTONES,
+  heartsForHat,
+  heartsForOutfit,
+  nextMilestone,
+  type Milestone,
+} from '../content';
 import { PRODUCT_FULL_GAME } from '../monetization/IStore';
 import type { CharacterAppearance } from '../save/SaveSchema';
 import type { DaySummary } from '../core/EventBus';
@@ -512,37 +519,106 @@ function stat(value: string, label: string): HTMLElement {
 /* Nature book                                                         */
 /* ------------------------------------------------------------------ */
 
-export function buildNatureBookScreen(ctx: GameContext, onClose: () => void): Screen {
-  const found = ctx.save.save.discoveries;
+const CATEGORY_HINT: Record<string, string> = { creature: '🐾', plant: '🌿', place: '⛰️' };
 
-  const grid = el(
-    'div',
-    { class: 'book__grid' },
-    DISCOVERIES.map((discovery) => {
-      const isFound = found.includes(discovery.id);
-      return el('div', { class: `book__entry${isFound ? '' : ' book__entry--locked'}` }, [
-        el('span', { class: 'book__icon', text: isFound ? discovery.icon : '❔' }),
-        el('span', {
-          class: 'book__name',
-          text: isFound ? ctx.loc.t(discovery.nameKey) : '???',
-        }),
-      ]);
-    }),
-  );
+type BookTab = 'nature' | 'stickers' | 'rewards';
+
+/**
+ * The album: what the child has found, the stickers they have earned, and
+ * the heart rewards on the way. Every page shows its empty frames too, since
+ * a collection with visible gaps is what gives collecting a shape. The gaps
+ * are hinted (a paw print for an animal, a leaf for a plant), never "???".
+ */
+export function buildNatureBookScreen(ctx: GameContext, onClose: () => void): Screen {
+  const save = ctx.save.save;
+  const body = el('div', { class: 'book__page' });
+  const summary = el('p', { class: 'screen__body book__summary' });
+
+  const entry = (icon: string, name: string, found: boolean, hint: string, tag?: string): HTMLElement =>
+    el('div', { class: `book__entry${found ? '' : ' book__entry--locked'}` }, [
+      el('span', { class: 'book__icon', text: found ? icon : hint }),
+      el('span', { class: 'book__name', text: found ? name : '' }),
+      tag ? el('span', { class: 'lock-badge', text: tag }) : null,
+    ]);
+
+  const pages: Record<BookTab, () => void> = {
+    nature: () => {
+      const found = save.discoveries;
+      summary.textContent =
+        found.length === 0
+          ? ctx.loc.t('naturebook.empty')
+          : ctx.loc.t('naturebook.found', { found: found.length, total: DISCOVERIES.length });
+      body.replaceChildren(
+        el('div', { class: 'book__grid' }, DISCOVERIES.map((d) =>
+          entry(d.icon, ctx.loc.t(d.nameKey), found.includes(d.id), CATEGORY_HINT[d.category] ?? '❔'),
+        )),
+      );
+    },
+    stickers: () => {
+      const ids = Object.keys(STICKER_ICON);
+      const have = ids.filter((id) => save.stickers.includes(id)).length;
+      summary.textContent = ctx.loc.t('naturebook.found', { found: have, total: ids.length });
+      body.replaceChildren(
+        el('div', { class: 'book__grid' }, ids.map((id) =>
+          entry(STICKER_ICON[id], ctx.loc.t(`sticker.${id}`), save.stickers.includes(id), '⭐'),
+        )),
+      );
+    },
+    rewards: () => {
+      const next = nextMilestone(save.hearts);
+      summary.textContent = next
+        ? ctx.loc.t('book.nextreward', { hearts: next.hearts - save.hearts })
+        : ctx.loc.t('book.allrewards');
+      // A path of rewards with a filling bar up to the next one.
+      const previous = [...MILESTONES].reverse().find((m) => m.hearts <= save.hearts)?.hearts ?? 0;
+      const progress = next ? (save.hearts - previous) / Math.max(1, next.hearts - previous) : 1;
+      body.replaceChildren(
+        el('div', { class: 'book__progress', role: 'progressbar', 'aria-valuenow': Math.round(progress * 100) }, [
+          el('span', { class: 'book__progress-fill', style: `width:${Math.round(progress * 100)}%` }),
+          el('span', { class: 'book__progress-label', text: next ? `❤ ${save.hearts} / ${next.hearts}` : `❤ ${save.hearts}` }),
+        ]),
+        el('div', { class: 'book__grid' }, MILESTONES.map((m) =>
+          entry(m.icon, '', save.hearts >= m.hearts, m.icon, save.hearts >= m.hearts ? undefined : `❤${m.hearts}`),
+        )),
+      );
+    },
+  };
+
+  const tabs = el('div', { class: 'book__tabs', role: 'tablist' });
+  const tabDefs: [BookTab, string, string][] = [
+    ['nature', '🦋', 'naturebook.title'],
+    ['stickers', '⭐', 'book.stickers'],
+    ['rewards', '❤️', 'book.rewards'],
+  ];
+  const select = (tab: BookTab): void => {
+    tabs.querySelectorAll('.book__tab').forEach((t) =>
+      t.setAttribute('aria-selected', String(t.getAttribute('data-tab') === tab)),
+    );
+    pages[tab]();
+    body.scrollTop = 0;
+  };
+  for (const [tab, icon, key] of tabDefs) {
+    const button = el('button', { class: 'book__tab', role: 'tab', 'data-tab': tab, 'aria-label': ctx.loc.t(key) }, [
+      el('span', { class: 'book__tab-icon', text: icon }),
+      el('span', { class: 'book__tab-label', text: ctx.loc.t(key) }),
+    ]);
+    onTap(button, () => {
+      ctx.audio.play('tap');
+      select(tab);
+    });
+    tabs.appendChild(button);
+  }
 
   const closeButton = el('button', { class: 'btn btn--wide', text: ctx.loc.t('common.close') });
 
-  const node = shell(ctx, 'naturebook.title', [
-    el('p', {
-      class: 'screen__body',
-      text:
-        found.length === 0
-          ? ctx.loc.t('naturebook.empty')
-          : ctx.loc.t('naturebook.found', { found: found.length, total: DISCOVERIES.length }),
-    }),
-    grid,
+  const node = shell(ctx, 'book.title', [
+    tabs,
+    summary,
+    body,
     el('div', { class: 'screen__actions' }, [closeButton]),
   ], { onDismiss: onClose });
+  node.classList.add('screen--book');
+  select('nature');
 
   onTap(closeButton, onClose);
   return { node };
