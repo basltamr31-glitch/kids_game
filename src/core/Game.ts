@@ -162,6 +162,7 @@ export class Game {
     this.layout.apply();
     ctx.formFactor = this.layout.formFactor;
     document.body.classList.toggle('reduced-motion', ctx.save.settings.reducedMotion);
+    document.body.classList.toggle('left-handed', ctx.save.settings.leftHanded);
 
     /* --- surface detail --- */
     // Generated once, before any geometry asks for them, so nothing hitches

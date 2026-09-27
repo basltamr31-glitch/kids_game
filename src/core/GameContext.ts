@@ -6,6 +6,7 @@ import type { AudioManager } from '../audio/AudioManager';
 import type { IPlatform } from '../platform/IPlatform';
 import type { Entitlements } from '../monetization/Entitlements';
 import type { Rng } from './Rng';
+import type { CrashLog } from './CrashLog';
 
 /**
  * The single object every system receives. It is deliberately a plain bag of
@@ -19,6 +20,8 @@ export interface GameContext {
   readonly loc: Localization;
   readonly audio: AudioManager;
   readonly entitlements: Entitlements;
+  /** On-device problem log, shown in the Parent Area. Absent in tests. */
+  readonly crashLog?: CrashLog;
   /** Seeded from the save file; the farm looks identical on every launch. */
   readonly worldRng: Rng;
 

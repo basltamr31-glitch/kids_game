@@ -840,6 +840,12 @@ export function buildParentAreaScreen(ctx: GameContext, handlers: ParentAreaHand
         s.subtitles = value;
       });
     }),
+    toggleRow(ctx, 'parent.area.lefthanded', settings.leftHanded, (value) => {
+      ctx.save.updateSettings((s) => {
+        s.leftHanded = value;
+      });
+      document.body.classList.toggle('left-handed', value);
+    }),
     toggleRow(ctx, 'parent.area.reducedmotion', settings.reducedMotion, (value) => {
       ctx.save.updateSettings((s) => {
         s.reducedMotion = value;
@@ -885,6 +891,27 @@ export function buildParentAreaScreen(ctx: GameContext, handlers: ParentAreaHand
     handlers.onResetProgress();
   });
 
+  /* --- problem reports (on this device only) --- */
+  const crashLog = ctx.crashLog;
+  const problemsGroup = crashLog && crashLog.count > 0
+    ? (() => {
+        const status = el('p', { class: 'footnote', text: ctx.loc.t('parent.area.problems.count', { count: crashLog.count }) });
+        const copy = el('button', { class: 'link', text: ctx.loc.t('parent.area.problems.copy') });
+        const clearButton = el('button', { class: 'link', text: ctx.loc.t('parent.area.problems.clear') });
+        onTap(copy, () => {
+          void navigator.clipboard?.writeText(crashLog.report()).then(
+            () => { status.textContent = ctx.loc.t('parent.area.problems.copied'); },
+            () => { status.textContent = ctx.loc.t('parent.area.problems.nocopy'); },
+          );
+        });
+        onTap(clearButton, () => {
+          void crashLog.clear();
+          status.textContent = ctx.loc.t('parent.area.problems.count', { count: 0 });
+        });
+        return group(ctx, 'parent.area.problems', [status, el('div', { class: 'linkrow' }, [copy, clearButton])]);
+      })()
+    : null;
+
   const closeButton = el('button', { class: 'btn btn--wide', text: ctx.loc.t('common.done') });
   onTap(closeButton, handlers.onClose);
 
@@ -894,6 +921,7 @@ export function buildParentAreaScreen(ctx: GameContext, handlers: ParentAreaHand
     displayGroup,
     group(ctx, 'parent.area.store', [storeButton]),
     links,
+    ...(problemsGroup ? [problemsGroup] : []),
     el('div', { class: 'linkrow' }, [resetButton]),
     el('p', { class: 'footnote', text: ctx.loc.t('parent.area.offline') }),
     el('p', {

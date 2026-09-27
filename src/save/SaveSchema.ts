@@ -124,6 +124,8 @@ export interface SettingsData {
   reducedMotion: boolean;
   /** Reads task names and prompts aloud for children who cannot read yet. */
   readAloud: boolean;
+  /** Mirrors the HUD left to right, for a child who reaches with the other hand. */
+  leftHanded: boolean;
   /** Premium entitlement cache. Authoritative source is always the store. */
   premiumUnlocked: boolean;
 }
@@ -179,6 +181,7 @@ export function createDefaultSettings(deviceLocale: string): SettingsData {
     subtitles: true,
     reducedMotion: false,
     readAloud: true,
+    leftHanded: false,
     premiumUnlocked: false,
   };
 }

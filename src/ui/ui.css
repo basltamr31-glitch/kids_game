@@ -509,6 +509,9 @@ body {
    without a word of text. */
 .prompt--object .prompt__bubble {
   border-color: var(--green);
+  /* Dashed as well as green: the difference must survive colour blindness,
+     where green and gold can look alike. */
+  border-style: dashed;
   animation-duration: 2.4s;
 }
 
@@ -1580,6 +1583,41 @@ input[type='range']::-moz-range-thumb {
   .rotate-hint {
     display: grid;
   }
+}
+
+/* Left-handed layout: the HUD mirrored left to right. The task list, which a
+   child reaches for most, moves to the other edge, and the day, hearts and
+   menu swap corners with it. */
+body.left-handed .tasks {
+  left: auto;
+  right: calc(var(--u) * 0.9 + var(--sa-right));
+  align-items: flex-end;
+}
+
+body.left-handed .tasks__title {
+  text-align: right;
+  padding: 0 calc(var(--u) * 0.6) 0 0;
+}
+
+body.left-handed .tasks__more {
+  justify-content: flex-end;
+}
+
+body.left-handed .hud__topleft {
+  left: auto;
+  right: calc(var(--u) * 0.9 + var(--sa-right));
+}
+
+body.left-handed .hud__topright {
+  right: auto;
+  left: calc(var(--u) * 0.9 + var(--sa-left));
+  flex-direction: row-reverse;
+}
+
+body.left-handed .toasts {
+  right: auto;
+  left: calc(var(--u) * 0.9 + var(--sa-left));
+  align-items: flex-start;
 }
 
 /* Respect the OS reduced-motion preference and our own setting. */

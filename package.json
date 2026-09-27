@@ -17,7 +17,8 @@
     "android:apk": "npm run cap:sync && cd android && gradlew.bat assembleRelease",
     "android:aab": "npm run cap:sync && cd android && gradlew.bat bundleRelease",
     "ios:add": "cap add ios",
-    "icons": "node tools/generate-icons.mjs"
+    "icons": "node tools/generate-icons.mjs",
+    "store:screenshots": "node tools/capture-store-screenshots.mjs"
   },
   "dependencies": {
     "@capacitor-community/text-to-speech": "^6.1.0",

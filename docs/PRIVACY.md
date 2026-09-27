@@ -16,6 +16,12 @@ SharedPreferences (via Capacitor Preferences):
 | `lad.save.v1` | Day number, hearts, stickers, discoveries, animal states, inventory, appearance |
 | `lad.save.v1.bak` | The previous good copy of the above |
 | `lad.settings.v1` | Volumes, language, quality, UI scale, accessibility flags, premium entitlement |
+| `lad.crashlog.v1` | Up to 20 recent error messages and stack lines, for a parent to copy from the Parent Area |
+
+The crash log is not a crash reporter: it is never sent anywhere. The Parent
+Area shows it only when it has entries, with **Copy report** (to the clipboard,
+for a parent to paste into an email themselves) and **Clear**. Error messages
+come from the game's own code and contain no personal data.
 
 None of it is personal data. The character's `name` field exists in the schema
 but is never prompted for and is always empty — there is **no free-text input

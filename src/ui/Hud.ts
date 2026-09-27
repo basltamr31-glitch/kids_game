@@ -363,7 +363,9 @@ export class Hud {
     const toX = target.left + target.width / 2;
     const toY = target.top + target.height / 2;
 
-    const reduceMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+    const reduceMotion =
+      this.ctx.save.settings.reducedMotion ||
+      window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
     // Past a handful they stop reading as individual hearts.
     const flights = Math.min(count, 5);
     for (let i = 0; i < flights; i++) {

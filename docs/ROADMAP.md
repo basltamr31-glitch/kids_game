@@ -29,69 +29,78 @@ its own.
 
 ## Phase 1: the first five minutes *(done)*
 
-All five are in. Fixing the morning also turned up a real bug: from day 2 on,
-the child was placed inside the mattress, with the camera buried behind the
-headboard.
+1. **Title screen.** The game's name over a slow camera drift round the
+   valley, one Play button, and the day number for a returning player. The
+   first tap also starts the audio.
+2. **Character creator you can see.** The panel sits to the side and a portrait
+   camera frames the child, so every tap visibly changes them. Haircuts are
+   drawn as the real styles, in the child's own colours.
+3. **A coherent first morning.** Every day, day 1 included, starts beside the
+   bed, and getting up plays by itself. This also fixed a real bug: from day 2
+   on, the child used to be placed inside the mattress, with the camera stuck
+   behind the headboard.
+4. **Pictures for pre-readers.** One suggestion in words; the rest are round
+   picture buttons.
+5. **Rewards you can feel.** Hearts fly from the child to the counter, which
+   counts up with a rising note as each lands.
 
-1. **Title screen.** The game's name over a slow camera drift across the
-   valley, a big Play button, and the day number for a returning player. It
-   covers the first rendered frame, and the first tap unlocks audio (browsers
-   need a tap before they play sound).
-2. **Character creator you can see.** The panel moves to the side and the
-   camera frames the child close up, so every tap visibly changes them. Hair
-   styles are drawn as simple shapes of the real haircuts instead of emoji.
-3. **A coherent first morning.** Day 1 starts in bed, as every later day
-   already does, so "Get out of bed" means what it says.
-4. **A task list for children who can't read yet.** Big icon tiles in a
-   compact column, labels shortened to one line, fewer choices on screen, and
-   the whole list can be tucked away.
-5. **Rewards you can feel.** Hearts rise from the child, fly to the counter one
-   by one, each with a note of a rising chime, and the counter bounces as they
-   land.
+## Phase 2: hearts that mean something *(done)*
 
-## Phase 2: hearts that mean something
+- **Faces that read in any light.** Characters get a viewer fill in the toon
+  material, so a warm lamp or a low sun warms a face instead of turning skin
+  and hair into the same orange.
+- **Heart milestones** (`content/Milestones.ts`): four hats, two outfits, and
+  five things that appear on the farm (a swing, a bench, a birdhouse, a
+  scarecrow and lanterns). Each is celebrated once. Farm features appear first,
+  with the camera turned toward them.
+- **Wardrobe.** After the morning "get dressed" chore, the creator opens in
+  wardrobe mode. Earned items show early, with a heart-count tag.
+- **Album.** Three tabs (nature finds, stickers, heart rewards) with empty
+  frames to fill, and a dot on the book when something is new.
+- **Indoor camera.** It now steps round the half-height room dividers and
+  furniture instead of pressing into them.
 
-- **Faces that read in any light.** *(done)* Characters get a viewer fill in
-  the toon material: where a surface faces the camera, its hue is restored at
-  the brightness the scene gave it, so a warm lamp warms a face instead of
-  turning skin and hair into the same orange.
+## Phase 3: a voice for pre-readers *(done)*
 
-- **Wardrobe unlocks.** Hearts unlock new outfits, hats and hair colours in the
-  character creator. That's a gentle goal with nothing to lose and no store
-  involved.
-- **The farm grows.** Heart milestones add visible things to the world: a swing
-  on the apple tree, a bench, flower boxes, a lamb. Coming back shows progress.
-- **Sticker album.** The nature book becomes a sticker album with empty frames
-  to fill, so collecting has a shape.
+- **Read aloud** (on by default): the device's offline text-to-speech says a
+  task's name when it starts, reads a tile when it is pressed and held, reads
+  Mum's and Dad's lines at a pitch for each speaker, and reads reward cards.
+- With read aloud off, parents talk in pitched babble syllables instead.
+- The music already followed the time of day; bedtime now has an original
+  lullaby.
 
-## Phase 3: a voice for pre-readers
+## Phase 4: a day with a shape *(done)*
 
-- A short, warm narration sting on every task tile and prompt bubble (built
-  with the same in-code synthesis approach as the rest of the audio).
-  Tapping and holding a tile says its name.
-- Parents speak with a "voice" made of pitched syllables, like Animal Crossing,
-  so speech reads as speech even without the subtitle.
-- A music layer that follows the time of day, with a lullaby at bedtime.
+- **Storybook page.** Each finished activity takes a small photo of the
+  moment, in memory only, and three of them, spread across the day, are
+  pinned to the goodnight page.
+- **Mornings.** A new season or new weather is announced, and read aloud,
+  once the child is up.
+- **Seasonal stickers** for first snow, the first rainy day, and each new
+  season.
+- *Not done:* bigger seasonal events such as a lamb born in spring or the
+  apple harvest. They need new animals and new animation, which is a content
+  project of its own.
 
-## Phase 4: a day with a shape
+## Phase 5: release quality *(code done; the rest needs people and devices)*
 
-- A proper end-of-day storybook page: three pictures of what you did today,
-  taken automatically at each completed activity.
-- A morning "what's new today" moment when the weather or season changes.
-- Seasonal events: first snow, apple harvest, a lamb being born in spring.
+Done in code:
+- **Accessibility.** A left-handed (mirrored) layout. The chore and object
+  prompt rings now differ in shape (dashed) as well as colour. The heart
+  flight honours the in-game reduced-motion setting as well as the OS one.
+- **Crash log on the device.** Uncaught errors are kept locally, and the
+  Parent Area can copy or clear them. Nothing is ever sent.
+- **Store screenshots.** `npm run store:screenshots` captures real frames at
+  the phone and tablet sizes Google Play asks for; see `docs/STORE.md`.
 
-## Phase 5: release quality
-
-- Test on a real low-end Android tablet and phone. The quality tiers are
-  reasoned but only measured on a desktop.
-- Replace `DevStore` with Play Billing, and point the privacy, terms and
-  support links at real pages.
-- Store listing assets: screenshots, a feature graphic and a trailer, captured
-  from the game itself.
-- Accessibility pass: a reduced-motion setting, colour-blind-safe prompt rings,
-  and a left-handed layout.
-- Crash reporting that stays on the device, with a parent-gated "send report"
-  button. There are still no analytics.
+Needs a person, an account or a device:
+- Testing on a real low-end Android tablet and phone. The quality tiers are
+  still measured only on a desktop.
+- Replacing `DevStore` with Play Billing (a Play Console app and products),
+  and pointing `LINKS` at real privacy, terms and support pages.
+- Clearing the name and choosing the final application id (`docs/STORE.md`).
+- Checking the read-aloud voices on real devices in each of the six
+  languages.
 
 ---
 
