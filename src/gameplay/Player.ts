@@ -174,6 +174,17 @@ export class Player {
     return this.carrying;
   }
 
+  /**
+   * Puts the child somewhere instantly, facing a given way. Only for cuts the
+   * player cannot see (behind a fade), such as waking up in the morning.
+   */
+  placeAt(point: Vector3, facing: number): void {
+    this.position.set(point.x, this.terrain.heightAt(point.x, point.z), point.z);
+    this.group.position.copy(this.position);
+    this.facing = facing;
+    this.group.rotation.y = facing;
+  }
+
   /** Which way the body is turned, in radians. Head tracking is relative to it. */
   get facingAngle(): number {
     return this.facing;

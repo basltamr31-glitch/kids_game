@@ -330,6 +330,7 @@ export class Game {
     } else {
       this.director.beginDay();
       this.syncPhaseDependents();
+      this.wakeInBed();
     }
 
     this.seedDiscoveries();
@@ -525,19 +526,73 @@ export class Game {
     this.syncPhaseDependents();
     this.seedDiscoveries();
 
-    // Put the child back in bed, then let them get up.
-    const bed = this.world.anchors.get('bed');
-    if (bed) {
-      this.player.position.copy(bed.position);
-      this.player.group.position.copy(bed.position);
-    }
-    this.player.setExpression('sleepy');
-    this.cameraRig.clearFocus();
-
     this.dayEnding = false;
+    this.wakeInBed();
     this.ui.setFade(false);
     ctx.audio.play('wake');
     this.hud.refreshTasks();
+  }
+
+  /**
+   * Starts the morning beside the bed, then gets up on its own.
+   *
+   * Getting out of bed is not a chore to go and find: the child is standing
+   * next to it, sleepy, framed by a camera already in the room, and a moment
+   * later stretches and the day begins. Does nothing once today's wake-up has
+   * happened, so resuming mid-morning leaves the child where the day put them.
+   */
+  private wakeInBed(): void {
+    const wakeup = this.director.remainingToday.find((a) => a.id === 'wakeup');
+    const bed = this.registry.get('bed');
+    if (!wakeup || !bed) return;
+
+    // The child turns back toward the bed they just climbed out of, and the
+    // camera looks at them across it: the first shot of the day is a sleepy
+    // face in their own bedroom, not the back of their head.
+    const bedPoint = bed.node.getWorldPosition(new Vector3());
+    const bedside = this.freeSpotNear(this.house.bedside(), bedPoint);
+    const facing = Math.atan2(bedPoint.x - bedside.x, bedPoint.z - bedside.z);
+    this.player.placeAt(bedside, facing);
+    this.player.setExpression('sleepy');
+    this.cameraRig.snapTo(this.player.position, this.player.height, facing, true);
+    // Settle the camera and the ghosted walls now rather than over the next
+    // half-second, so the first frame after the fade is already composed.
+    this.cameraRig.update(this.player.position, this.player.height, this.world.terrain, 1 / 60);
+    updateCutaways(this.world, this.player.position, this.cameraRig.camera.position, 10);
+
+    window.setTimeout(() => {
+      if (this.dayEnding || this.ui.modalCount > 0) return;
+      if (!this.director.remainingToday.some((a) => a.id === 'wakeup')) return;
+      this.interaction.tryStart(wakeup);
+    }, 1400);
+  }
+
+  /**
+   * The nearest point to `preferred` where the child fits, searched in rings.
+   * Furniture moves about as the house is dressed, so a fixed offset from the
+   * bed can land inside the bedside table. Prefers points away from `avoid`.
+   */
+  private freeSpotNear(preferred: Vector3, avoid: Vector3): Vector3 {
+    const collision = this.world.collision;
+    if (!collision.blocks(preferred.x, preferred.z, 0.3, 'animal')) return preferred;
+    for (let ring = 1; ring <= 10; ring++) {
+      const radius = ring * 0.2;
+      let best: Vector3 | null = null;
+      let bestDistance = -Infinity;
+      for (let i = 0; i < 16; i++) {
+        const angle = (i / 16) * Math.PI * 2;
+        const x = preferred.x + Math.sin(angle) * radius;
+        const z = preferred.z + Math.cos(angle) * radius;
+        if (collision.blocks(x, z, 0.3, 'animal')) continue;
+        const fromBed = Math.hypot(x - avoid.x, z - avoid.z);
+        if (fromBed > bestDistance) {
+          bestDistance = fromBed;
+          best = new Vector3(x, preferred.y, z);
+        }
+      }
+      if (best) return best;
+    }
+    return preferred;
   }
 
   /**
@@ -611,7 +666,14 @@ export class Game {
         this.ui.pop('customize');
         this.director.beginDay();
         this.syncPhaseDependents();
-        this.hud.refreshTasks();
+        // The first day starts where every day does. The swap happens under a
+        // short fade so the child is never seen jumping from yard to bedroom.
+        this.ui.setFade(true);
+        window.setTimeout(() => {
+          this.wakeInBed();
+          this.ui.setFade(false);
+          this.hud.refreshTasks();
+        }, 450);
       },
     );
     this.ui.push(screen, 'customize');
@@ -930,12 +992,18 @@ export class Game {
       this.cameraRig.camera.position,
       dt,
     );
-    // The interior lamp sits a little above the child's head, in the room they
-    // are actually standing in.
+    // The interior lamp lights the room the child is standing in. It hangs high
+    // and a little toward the camera: directly over the head it burnt the hair
+    // and face out to a flat orange blob, and from the front it lights the face,
+    // which is what the child is looking at.
+    const camera = this.cameraRig.camera.position;
+    const towardX = camera.x - this.player.position.x;
+    const towardZ = camera.z - this.player.position.z;
+    const toward = Math.hypot(towardX, towardZ) || 1;
     this.interiorLightTarget.set(
-      this.player.position.x,
-      this.player.position.y + 2.0,
-      this.player.position.z,
+      this.player.position.x + (towardX / toward) * 1.2,
+      this.player.position.y + 2.8,
+      this.player.position.z + (towardZ / toward) * 1.2,
     );
     this.weather.setInterior(this.interiorLightTarget, insideBuilding ? 1 : 0, dt);
     // Same signal drives the camera: walls ghosting, the boom coming in, and

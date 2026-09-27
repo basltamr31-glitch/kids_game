@@ -135,6 +135,25 @@ export class CameraRig {
     this.mode = 'focus';
   }
 
+  /**
+   * Cuts straight to a framing of the target, skipping the damped glide.
+   * Used behind a fade so the first visible frame is already composed.
+   */
+  snapTo(targetPosition: Vector3, targetHeight: number, theta: number, indoor: boolean): void {
+    this.mode = 'follow';
+    this.focusTimer = 0;
+    this.targetSpherical.theta = theta;
+    this.spherical.theta = theta;
+    this.indoorBlend = indoor ? 1 : 0;
+    this.spherical.radius = indoor ? INDOOR_RADIUS : this.targetSpherical.radius;
+    this.spherical.phi = indoor ? INDOOR_PHI : this.targetSpherical.phi;
+    this.lookAt.set(
+      targetPosition.x,
+      targetPosition.y + targetHeight * (0.62 + (indoor ? 0.3 : 0)),
+      targetPosition.z,
+    );
+  }
+
   clearFocus(): void {
     this.focusTimer = 0;
     this.mode = 'follow';
