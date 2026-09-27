@@ -81,3 +81,23 @@ describe('v3 -> v4 migration', () => {
     expect(data.hearts).toBe(60);
   });
 });
+
+import { pickSpread } from '../src/gameplay/Storybook';
+
+describe('storybook photo choice', () => {
+  const shots = (ids: string[]) => ids.map((activityId, i) => ({ activityId, image: String(i) }));
+
+  it('keeps everything when there are few photos', () => {
+    expect(pickSpread(shots(['a', 'b']), 3).map((s) => s.activityId)).toEqual(['a', 'b']);
+  });
+
+  it('spreads across the day, first to last', () => {
+    const picked = pickSpread(shots(['a', 'b', 'c', 'd', 'e', 'f', 'g']), 3);
+    expect(picked.map((s) => s.activityId)).toEqual(['a', 'd', 'g']);
+  });
+
+  it('never shows the same activity twice', () => {
+    const picked = pickSpread(shots(['a', 'a', 'a', 'b', 'b', 'c']), 3);
+    expect(picked.map((s) => s.activityId)).toEqual(['a', 'b', 'c']);
+  });
+});

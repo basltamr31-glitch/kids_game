@@ -450,7 +450,27 @@ export function buildDayEndScreen(
   ctx: GameContext,
   summary: DaySummary,
   onNext: () => void,
+  /** Photos taken during the day; see gameplay/Storybook.ts. */
+  photos: { activityId: string; image: string; caption: string }[] = [],
 ): Screen {
+  // The day as a storybook page: a few pictures of what you did, pinned at
+  // slightly different angles like photos on a fridge.
+  const storyRow = photos.length
+    ? el(
+        'div',
+        { class: 'story' },
+        photos.map((photo, index) =>
+          el('figure', {
+            class: 'story__photo',
+            style: `--tilt:${[-4, 3, -2][index % 3]}deg;animation-delay:${200 + index * 220}ms`,
+          }, [
+            el('img', { src: photo.image, alt: photo.caption, draggable: 'false' }),
+            el('figcaption', { text: photo.caption }),
+          ]),
+        ),
+      )
+    : null;
+
   const stats = el('div', { class: 'dayend__stats' }, [
     stat(String(summary.tasksCompleted), ctx.loc.t('dayend.tasks', { count: summary.tasksCompleted })),
     stat(String(summary.hearts), ctx.loc.t('hud.hearts', { count: summary.hearts })),
@@ -484,6 +504,7 @@ export function buildDayEndScreen(
     'dayend.title',
     [
       el('p', { class: 'screen__body', text: ctx.loc.t('dayend.goodnight') }),
+      ...(storyRow ? [storyRow] : []),
       stats,
       stickerRow,
       el('div', { class: 'screen__actions' }, [nextButton]),
@@ -506,6 +527,11 @@ const STICKER_ICON: Record<string, string> = {
   explorer: '🧭',
   helper: '🤝',
   weekone: '📅',
+  rainyday: '☔',
+  firstsnow: '❄️',
+  spring: '🌷',
+  autumn: '🍂',
+  winter: '⛄',
 };
 
 function stat(value: string, label: string): HTMLElement {

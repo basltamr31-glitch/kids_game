@@ -1073,6 +1073,56 @@ body {
 /* Day end                                                             */
 /* ------------------------------------------------------------------ */
 
+/* The day's photos, pinned like prints on a fridge. */
+.story {
+  display: flex;
+  justify-content: center;
+  gap: calc(var(--u) * 0.9);
+  margin: calc(var(--u) * 0.6) 0 calc(var(--u) * 0.4);
+}
+
+.story__photo {
+  margin: 0;
+  background: #fff;
+  padding: calc(var(--u) * 0.35) calc(var(--u) * 0.35) calc(var(--u) * 0.2);
+  border-radius: calc(var(--u) * 0.25);
+  box-shadow: 0 calc(var(--u) * 0.25) calc(var(--u) * 0.6) var(--shadow);
+  transform: rotate(var(--tilt, 0deg));
+  width: calc(var(--u) * 9);
+  animation: photo-in 0.5s cubic-bezier(0.2, 1.3, 0.5, 1) both;
+}
+
+.story__photo img {
+  display: block;
+  width: 100%;
+  aspect-ratio: 8 / 5;
+  object-fit: cover;
+  border-radius: calc(var(--u) * 0.12);
+  background: var(--cream-deep);
+}
+
+.story__photo figcaption {
+  font-size: calc(var(--u) * 0.66);
+  font-weight: 700;
+  color: var(--brown-soft);
+  text-align: center;
+  margin-top: calc(var(--u) * 0.2);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+@keyframes photo-in {
+  0% { opacity: 0; transform: translateY(calc(var(--u) * 1)) rotate(0deg) scale(0.9); }
+  100% { opacity: 1; transform: rotate(var(--tilt, 0deg)); }
+}
+
+@media (max-height: 420px) {
+  .story__photo {
+    width: calc(var(--u) * 7.2);
+  }
+}
+
 .dayend__stats {
   display: flex;
   justify-content: center;

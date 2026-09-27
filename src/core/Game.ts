@@ -32,6 +32,7 @@ import type { SuggestionContext } from '../gameplay/Suggestions';
 import { buildHouseInteractions, type HouseState } from '../world/HouseInteractions';
 import { buildFarmInteractions, type FarmState } from '../world/FarmInteractions';
 import { FarmFeatures } from '../world/FarmFeatures';
+import { Storybook } from '../gameplay/Storybook';
 import { CHALET_DIVIDERS } from '../world/Buildings';
 import { AnimalAgent } from '../animals/AnimalAgent';
 import { FamilyAgent } from '../characters/FamilyAgent';
@@ -42,6 +43,7 @@ import {
   DISCOVERIES_BY_ID,
   AREAS_BY_ID,
   ITEMS_BY_ID,
+  ACTIVITIES_BY_ID,
   MILESTONES,
   farmFeaturesAt,
 } from '../content';
@@ -73,6 +75,9 @@ import { APP_VERSION, LINKS } from './Config';
  * `src/gameplay`.
  */
 const _animalBodies: { x: number; z: number; r: number }[] = [];
+
+const SEASON_ICON: Record<string, string> = { spring: '🌷', summer: '🌻', autumn: '🍂', winter: '⛄' };
+const WEATHER_ICON: Record<string, string> = { sunny: '☀️', cloudy: '⛅', rain: '🌧️', snow: '❄️', fog: '🌫️' };
 
 export class Game {
   private ctx: GameContext;
@@ -109,6 +114,7 @@ export class Game {
   private dayEnding = false;
   private farmFeatures!: FarmFeatures;
   private celebrating = false;
+  private storybook = new Storybook();
   private milestoneTimer = 1;
   private playerIndoors = false;
   private discoveryTargets: { id: string; position: Vector3; found: boolean }[] = [];
@@ -402,6 +408,7 @@ export class Game {
     const ctx = this.ctx;
 
     ctx.bus.on('activity:completed', ({ activityId }) => {
+      this.storybook.request(activityId);
       // Getting dressed means choosing what to wear.
       if (activityId === 'getdressed') {
         window.setTimeout(() => {
@@ -517,8 +524,12 @@ export class Game {
         season: summary.season,
       }, () => {
         this.ui.pop('dayend');
+        this.storybook.clear();
         this.startNextDay();
-      });
+      }, this.storybook.pick(3).map((shot) => ({
+        ...shot,
+        caption: this.ctx.loc.t(ACTIVITIES_BY_ID.get(shot.activityId)?.titleKey ?? 'app.title'),
+      })));
       this.ui.push(screen, 'dayend');
       this.ctx.audio.play('reward');
     }, 1800);
@@ -528,6 +539,7 @@ export class Game {
     const ctx = this.ctx;
     const save = ctx.save.save;
     const previousSeason = this.director.currentPlan.season;
+    const previousWeather = save.weather;
 
     // Overnight: animals rest, feed, refill.
     const nightRng = ctx.worldRng.fork(`night-${save.day}`);
@@ -561,6 +573,48 @@ export class Game {
     this.ui.setFade(false);
     ctx.audio.play('wake');
     this.hud.refreshTasks();
+    this.announceMorning(previousSeason, previousWeather);
+  }
+
+  /**
+   * What is new this morning: a new season, or different weather, told once
+   * the child is up. Seasons and first snow also leave a sticker, so they
+   * become things to collect as well as things that happen.
+   */
+  private announceMorning(previousSeason: string, previousWeather: string): void {
+    const ctx = this.ctx;
+    const { season, weather } = ctx.save.save;
+    const earned: string[] = [];
+    ctx.save.update((data) => {
+      const add = (id: string): void => {
+        if (!data.stickers.includes(id)) {
+          data.stickers.push(id);
+          earned.push(id);
+        }
+      };
+      if (weather === 'snow') add('firstsnow');
+      if (weather === 'rain') add('rainyday');
+      if (season !== 'summer') add(season);
+    });
+
+    const line =
+      season !== previousSeason
+        ? { key: `season.${season}`, icon: SEASON_ICON[season] ?? '🌿' }
+        : weather !== previousWeather
+          ? { key: `morning.${weather}`, icon: WEATHER_ICON[weather] ?? '☀️' }
+          : null;
+
+    window.setTimeout(() => {
+      if (this.dayEnding) return;
+      if (line) {
+        this.hud.showToast(line.key, line.icon);
+        this.hud.say(ctx.loc.t(line.key));
+      }
+      if (earned.length) {
+        ctx.audio.play('sticker');
+        ctx.bus.emit('ui:toast', { textKey: 'toast.sticker', icon: '⭐' });
+      }
+    }, 3200);
   }
 
   /**
@@ -1078,6 +1132,7 @@ export class Game {
     this.qualityMonitor.sample(rawDelta, now);
     this.update(dt);
     this.renderer.render(this.scene, this.cameraRig.camera);
+    if (this.storybook.tick(dt)) this.storybook.capture(this.renderer.domElement);
   };
 
   private update(dt: number): void {
