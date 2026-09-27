@@ -51,10 +51,10 @@ headboard.
 
 ## Phase 2: hearts that mean something
 
-- **Faces that read in any light.** In the low morning sun the child is
-  backlit, and warm light pushes skin and hair toward the same orange, so the
-  face loses its features. The child needs a soft fill or rim term in the toon
-  material, and the palette's skin tones need checking under every time of day.
+- **Faces that read in any light.** *(done)* Characters get a viewer fill in
+  the toon material: where a surface faces the camera, its hue is restored at
+  the brightness the scene gave it, so a warm lamp warms a face instead of
+  turning skin and hair into the same orange.
 
 - **Wardrobe unlocks.** Hearts unlock new outfits, hats and hair colours in the
   character creator. That's a gentle goal with nothing to lose and no store
