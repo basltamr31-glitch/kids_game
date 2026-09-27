@@ -449,6 +449,10 @@ export class Hud {
     }
   }
 
+  get isVisible(): boolean {
+    return this.visible;
+  }
+
   setVisible(visible: boolean): void {
     this.visible = visible;
     this.root.style.display = visible ? '' : 'none';

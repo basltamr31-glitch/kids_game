@@ -117,8 +117,9 @@ export const PALETTE = {
   /* --- characters --- */
   skinTones: ['#F6D3B8', '#EDBE99', '#D19A6E', '#A97148', '#7C4F31', '#5A3722'],
   hairColors: ['#3B2A1E', '#6B4226', '#A9703B', '#D9A441', '#E8DCC0', '#8C3B2B'],
-  outfitPrimary: ['#5B8FD0', '#D9605E', '#68A860', '#E0A03C', '#8E6BBF', '#E08A3C'],
-  outfitSecondary: ['#F4E8D6', '#FFF3E2', '#E9F0DC', '#FBEAD2', '#EFE6F7', '#FFEBD6'],
+  // The first six are free; the rest are earned with hearts (content/Milestones.ts).
+  outfitPrimary: ['#5B8FD0', '#D9605E', '#68A860', '#E0A03C', '#8E6BBF', '#E08A3C', '#3FA7A0', '#E88FB4'],
+  outfitSecondary: ['#F4E8D6', '#FFF3E2', '#E9F0DC', '#FBEAD2', '#EFE6F7', '#FFEBD6', '#E4F4F1', '#FFF0F6'],
   shoe: '#5B4536',
   motherDress: '#C4607F',
   motherApron: '#F6EFE2',

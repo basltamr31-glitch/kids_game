@@ -864,7 +864,11 @@ body {
 }
 
 .screen--side .screen__card {
-  width: min(calc(var(--u) * 30), 56%);
+  width: min(calc(var(--u) * 31), 60%);
+}
+
+.screen--side .swatches {
+  gap: calc(var(--u) * 0.35);
 }
 
 .screen--side .screen__card {
@@ -885,9 +889,9 @@ body {
 }
 
 .screen--side .swatch {
-  width: calc(var(--u) * 2.3);
-  height: calc(var(--u) * 2.3);
-  min-width: calc(var(--u) * 2.3);
+  width: calc(var(--u) * 2.1);
+  height: calc(var(--u) * 2.1);
+  min-width: calc(var(--u) * 2.1);
 }
 
 .chip.chip--portrait {
@@ -967,6 +971,74 @@ body {
   background: var(--green);
   border-color: var(--green-deep);
   color: #fff;
+}
+
+/* Earned options before they are earned: visible, softened, with the
+   heart count on a little tag, so a child can see what is coming. */
+.swatch.is-locked,
+.chip.is-locked {
+  position: relative;
+  filter: saturate(0.45);
+  opacity: 0.75;
+}
+
+.lock-badge {
+  position: absolute;
+  right: calc(var(--u) * -0.45);
+  bottom: calc(var(--u) * -0.35);
+  font-size: calc(var(--u) * 0.6);
+  font-weight: 800;
+  line-height: 1;
+  color: #fff;
+  background: var(--heart);
+  border-radius: var(--radius-pill);
+  padding: calc(var(--u) * 0.15) calc(var(--u) * 0.3);
+  box-shadow: 0 calc(var(--u) * 0.08) 0 rgba(0, 0, 0, 0.15);
+  white-space: nowrap;
+}
+
+.chip.chip--icon {
+  position: relative;
+  font-size: calc(var(--u) * 1.5);
+  line-height: 1;
+}
+
+/* ------------------------------------------------------------------ */
+/* Milestone                                                           */
+/* ------------------------------------------------------------------ */
+
+.screen--celebrate .screen__card {
+  text-align: center;
+  width: min(calc(var(--u) * 28), 92%);
+}
+
+.milestone__icon {
+  font-size: calc(var(--u) * 4.4);
+  line-height: 1.1;
+  margin: calc(var(--u) * 0.2) 0 calc(var(--u) * 0.4);
+  animation: milestone-pop 0.7s cubic-bezier(0.2, 1.6, 0.4, 1) both;
+}
+
+.milestone__text {
+  font-size: calc(var(--u) * 1.1);
+  font-weight: 700;
+}
+
+.milestone__actions {
+  display: flex;
+  flex-direction: column;
+  gap: calc(var(--u) * 0.5);
+}
+
+@keyframes milestone-pop {
+  0% { transform: scale(0.2) rotate(-20deg); opacity: 0; }
+  100% { transform: scale(1) rotate(0); opacity: 1; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .milestone__icon {
+    animation: none;
+  }
 }
 
 /* ------------------------------------------------------------------ */

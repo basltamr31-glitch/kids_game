@@ -31,6 +31,8 @@ import { ParentReactions } from '../gameplay/ParentReactions';
 import type { SuggestionContext } from '../gameplay/Suggestions';
 import { buildHouseInteractions, type HouseState } from '../world/HouseInteractions';
 import { buildFarmInteractions, type FarmState } from '../world/FarmInteractions';
+import { FarmFeatures } from '../world/FarmFeatures';
+import { CHALET_DIVIDERS } from '../world/Buildings';
 import { AnimalAgent } from '../animals/AnimalAgent';
 import { FamilyAgent } from '../characters/FamilyAgent';
 
@@ -40,6 +42,8 @@ import {
   DISCOVERIES_BY_ID,
   AREAS_BY_ID,
   ITEMS_BY_ID,
+  MILESTONES,
+  farmFeaturesAt,
 } from '../content';
 import type { AnimalSaveState } from '../save/SaveSchema';
 
@@ -49,6 +53,7 @@ import { ResponsiveLayout } from '../ui/ResponsiveLayout';
 import {
   buildCustomizeScreen,
   buildTitleScreen,
+  buildMilestoneScreen,
   buildDayEndScreen,
   buildNatureBookScreen,
   buildParentGateScreen,
@@ -102,6 +107,10 @@ export class Game {
   private rafHandle = 0;
   private windTime = 0;
   private dayEnding = false;
+  private farmFeatures!: FarmFeatures;
+  private celebrating = false;
+  private milestoneTimer = 1;
+  private playerIndoors = false;
   private discoveryTargets: { id: string; position: Vector3; found: boolean }[] = [];
   private interiorLightTarget = new Vector3();
 
@@ -175,6 +184,11 @@ export class Game {
     /* --- camera & input --- */
     this.cameraRig = new CameraRig(window.innerWidth / window.innerHeight, ctx.formFactor);
     this.input = new InputManager(this.renderer.domElement);
+    // While dressing up, the child keeps facing the camera as it steps round
+    // furniture to keep them in view.
+    this.cameraRig.onAvoid = (theta) => {
+      if (this.ui?.has('wardrobe')) this.player.turnTo(theta);
+    };
 
     /* --- the child --- */
     // Spawn in the open farmyard looking north up the valley. The porch would
@@ -213,6 +227,9 @@ export class Game {
     // offers. That is the whole coupling between them.
     this.runner = new InteractionRunner(ctx, this.player);
     const chalet = this.world.cutaways[0];
+    // Whatever the hearts have already earned is standing there on load.
+    this.farmFeatures = new FarmFeatures(this.world);
+    this.farmFeatures.sync(farmFeaturesAt(ctx.save.save.hearts));
     this.house = buildHouseInteractions(
       this.registry,
       () => this.runner.carriedProp,
@@ -235,6 +252,12 @@ export class Game {
       this.world.nav.rebuild();
 
       this.cameraRig.setCollision(this.world.collision);
+      const house = this.world.cutaways[0]?.centre;
+      if (house) {
+        this.cameraRig.setOccluders(
+          CHALET_DIVIDERS.map((d) => ({ x: house.x + d.x, z: house.z + d.z, hx: d.w / 2, hz: d.d / 2 })),
+        );
+      }
       this.player.setDoor(this.house.door);
       this.player.onDoorOpened = () => this.ctx.audio.play('door');
       this.house.door.placeAt(
@@ -378,7 +401,13 @@ export class Game {
   private wireEvents(): void {
     const ctx = this.ctx;
 
-    ctx.bus.on('activity:completed', () => {
+    ctx.bus.on('activity:completed', ({ activityId }) => {
+      // Getting dressed means choosing what to wear.
+      if (activityId === 'getdressed') {
+        window.setTimeout(() => {
+          if (!this.dayEnding && this.ui.modalCount === 0) this.openWardrobe();
+        }, 500);
+      }
       const result = this.director.onActivityCompleted();
       if (result.phaseChanged) this.syncPhaseDependents();
       if (result.dayComplete && !this.dayEnding) this.finishDay();
@@ -684,6 +713,96 @@ export class Game {
     }, 380);
   }
 
+  /**
+   * Getting dressed: the same creator in wardrobe mode, for what the child
+   * wears only. Opened after the morning "get dressed" chore and from a new
+   * hat or outfit's "Try it on!".
+   */
+  private openWardrobe(): void {
+    const ctx = this.ctx;
+    if (this.ui.has('wardrobe')) return;
+    this.hud.setVisible(false);
+    // Turn to face the camera where it already is rather than swinging the
+    // camera round to the child's front: indoors, the front is often a wall,
+    // and the current angle is known to have a clear view.
+    const theta = this.cameraRig.orbitTheta;
+    this.player.turnTo(theta);
+    this.cameraRig.setPortrait(theta);
+    const screen = buildCustomizeScreen(
+      ctx,
+      ctx.save.save.child,
+      (next) => this.rebuildPlayer(next),
+      (final) => {
+        ctx.save.update((data) => {
+          data.child = final;
+        });
+        void ctx.save.flush(true);
+        this.ui.pop('wardrobe');
+        this.cameraRig.setPortrait(null);
+        this.hud.setVisible(true);
+        ctx.bus.emit('emote', { actor: 'child', emote: '✨' });
+      },
+      'wardrobe',
+    );
+    this.ui.push(screen, 'wardrobe');
+  }
+
+  /**
+   * Plays the next uncelebrated heart milestone, if the moment is right: not
+   * mid-chore, not behind another panel, not while falling asleep. A farm
+   * feature appears in the world first and the camera turns to it, then the
+   * card follows, so the child sees the thing before being told about it.
+   */
+  private checkMilestones(): void {
+    if (this.celebrating || this.dayEnding) return;
+    if (this.activities.isRunning || this.runner.isRunning || this.ui.modalCount > 0 || !this.hud.isVisible) return;
+    const save = this.ctx.save.save;
+    const milestone = MILESTONES.find(
+      (m) => save.hearts >= m.hearts && !save.milestonesSeen.includes(m.id),
+    );
+    if (!milestone) return;
+
+    this.celebrating = true;
+    this.ctx.save.update((data) => {
+      data.milestonesSeen.push(milestone.id);
+    });
+
+    const reward = milestone.reward;
+    let delay = 600;
+    if (reward.kind === 'farm') {
+      this.farmFeatures.sync(farmFeaturesAt(save.hearts));
+      const where = this.farmFeatures.positionOf(reward.feature);
+      if (where && !this.playerIndoors) {
+        this.cameraRig.focusOn(where, 4.5);
+        delay = 2200;
+      }
+    }
+
+    window.setTimeout(() => {
+      this.ctx.audio.play('discovery');
+      const wearable = reward.kind === 'hat' || reward.kind === 'outfit';
+      const screen = buildMilestoneScreen(this.ctx, milestone, {
+        onTryOn: wearable
+          ? () => {
+              this.ui.pop('milestone');
+              this.celebrating = false;
+              this.ctx.save.update((data) => {
+                if (reward.kind === 'hat') data.child.hat = reward.hat;
+                if (reward.kind === 'outfit') data.child.outfit = reward.outfit;
+              });
+              this.rebuildPlayer(this.ctx.save.save.child);
+              this.openWardrobe();
+            }
+          : undefined,
+        onClose: () => {
+          this.ui.pop('milestone');
+          this.celebrating = false;
+        },
+      });
+      this.ui.push(screen, 'milestone');
+    }, delay);
+  }
+
   private openCustomize(): void {
     const ctx = this.ctx;
     this.hud.setVisible(false);
@@ -985,6 +1104,12 @@ export class Game {
 
     this.registry.update(dt);
     this.house.update(dt, this.player.position);
+    this.farmFeatures.update(dt);
+    this.milestoneTimer -= dt;
+    if (this.milestoneTimer <= 0) {
+      this.milestoneTimer = 0.5;
+      this.checkMilestones();
+    }
     this.runner.update(dt);
     this.activities.update(dt);
     this.notices.update(dt, this.runner.isRunning || this.activities.isRunning);
@@ -1046,6 +1171,7 @@ export class Game {
     // the orbit swinging round to the building's open face are one event, so
     // they can never disagree.
     this.cameraRig.setIndoor(insideBuilding, dt);
+    this.playerIndoors = insideBuilding !== null;
 
     // Stream ambience by proximity.
     const distanceToStream = Math.abs(this.player.position.z - 68);

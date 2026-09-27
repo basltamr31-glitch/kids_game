@@ -43,6 +43,7 @@ export type CameraMode = 'follow' | 'focus' | 'cinematic' | 'portrait';
 const INDOOR_RADIUS = 4.6;
 const INDOOR_PHI = MathUtils.degToRad(66);
 
+const _probeOffset = new Vector3();
 const _shortened = new Vector3();
 
 export class CameraRig {
@@ -75,6 +76,8 @@ export class CameraRig {
    * Indoors the boom comes in and lifts to look down into the room.
    */
   private indoorBlend = 0;
+  private avoidTimer = 0;
+  private occluders: { x: number; z: number; hx: number; hz: number }[] = [];
 
   /** Used to keep the child in view; set once the world exists. */
   private collision: CollisionWorld | null = null;
@@ -128,6 +131,36 @@ export class CameraRig {
       this.minDistance,
       this.maxDistance,
     );
+  }
+
+  /**
+   * The nearest orbit angle (15° steps, both ways) whose boom is clear, or
+   * failing that the clearest one found, if it beats `current` by a margin.
+   */
+  private clearerTheta(look: Vector3, radius: number, phi: number, current: number): number | null {
+    const probe = new Spherical(radius, phi, 0);
+    let best: number | null = null;
+    let bestClear = current + 0.2;
+    for (let i = 1; i <= 12; i++) {
+      for (const sign of [1, -1]) {
+        probe.theta = this.targetSpherical.theta + sign * i * (Math.PI / 12);
+        const clear = this.firstClearDistance(look, _probeOffset.setFromSpherical(probe));
+        if (clear >= 0.95) return probe.theta;
+        if (clear > bestClear) {
+          bestClear = clear;
+          best = probe.theta;
+        }
+      }
+    }
+    return best;
+  }
+
+  /** Called when obstruction avoidance picks a new angle. */
+  onAvoid: ((theta: number) => void) | null = null;
+
+  /** Current orbit angle: the direction from the target to the camera. */
+  get orbitTheta(): number {
+    return this.spherical.theta;
   }
 
   /** Pull the camera to a scripted point of interest for a few seconds. */
@@ -206,9 +239,12 @@ export class CameraRig {
     } else if (this.mode === 'portrait') {
       // Slide the aim point to the child's screen-right so they stand left of
       // centre, clear of the panel.
+      // Scaled by how far the camera really is: indoors the boom is often
+      // shortened by walls, and a fixed shift would push the child off screen.
       const theta = this.spherical.theta;
-      desired.x += Math.cos(theta) * 1.05;
-      desired.z -= Math.sin(theta) * 1.05;
+      const shift = Math.min(1.05, this.camera.position.distanceTo(this.lookAt) * 0.26);
+      desired.x += Math.cos(theta) * shift;
+      desired.z -= Math.sin(theta) * shift;
       desired.y -= targetHeight * 0.08;
     }
 
@@ -262,6 +298,20 @@ export class CameraRig {
     // would do: step closer until you can see them.
     if (this.collision && this.indoorBlend > 0.01) {
       const clear = this.firstClearDistance(this.lookAt, offset);
+      // Shortening alone is not enough when the obstacle is right behind the
+      // child (a wardrobe they are standing at, the bed they climbed out of):
+      // the boom bottoms out inside it and the child vanishes. Then the
+      // camera walks round to the nearest angle that can see them, the way
+      // an operator steps sideways rather than pressing into a wall.
+      this.avoidTimer -= dt;
+      if (clear < 0.7 && this.avoidTimer <= 0 && this.mode !== 'focus') {
+        this.avoidTimer = 0.3;
+        const better = this.clearerTheta(this.lookAt, this.spherical.radius, this.spherical.phi, clear);
+        if (better !== null) {
+          this.targetSpherical.theta = better;
+          this.onAvoid?.(better);
+        }
+      }
       if (clear < 1) {
         _shortened.copy(offset).multiplyScalar(Math.max(0.35, clear));
         position = new Vector3().addVectors(this.lookAt, _shortened);
@@ -317,12 +367,27 @@ export class CameraRig {
       const z = lookAt.z + offset.z * t;
       // Only walls and furniture; an animal wandering past must not yank the
       // camera in.
-      if (collision.blocks(x, z, 0.3, 'animal')) {
+      if (collision.blocks(x, z, 0.3, 'animal') || this.occluded(x, z)) {
         // Stop just short of whatever was hit.
         return Math.max(0.3, (i - 1) / steps);
       }
     }
     return 1;
+  }
+
+  /**
+   * Things the camera cannot see through that the child can walk past, such
+   * as the chalet's half-height room dividers. Axis-aligned, world space.
+   */
+  setOccluders(boxes: { x: number; z: number; hx: number; hz: number }[]): void {
+    this.occluders = boxes;
+  }
+
+  private occluded(x: number, z: number): boolean {
+    for (const o of this.occluders) {
+      if (Math.abs(x - o.x) < o.hx + 0.3 && Math.abs(z - o.z) < o.hz + 0.3) return true;
+    }
+    return false;
   }
 
   /** Camera-relative forward/right on the ground plane, for movement input. */

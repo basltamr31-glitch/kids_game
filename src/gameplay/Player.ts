@@ -185,6 +185,11 @@ export class Player {
     this.group.rotation.y = facing;
   }
 
+  /** Turns on the spot, eased by the normal body turn. */
+  turnTo(facing: number): void {
+    this.facing = facing;
+  }
+
   /** Which way the body is turned, in radians. Head tracking is relative to it. */
   get facingAngle(): number {
     return this.facing;
@@ -456,6 +461,7 @@ export function lookFromAppearance(appearance: CharacterAppearance): CharacterLo
     secondary: OUTFIT_SECONDARY[appearance.outfit % OUTFIT_SECONDARY.length],
     adult: false,
     skirt: appearance.preset === 'girl' && appearance.outfit % 2 === 0,
+    hat: appearance.hat ?? 0,
   };
 }
 

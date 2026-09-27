@@ -1,7 +1,7 @@
 import { el, onTap, removeAnimated } from './dom';
 import type { GameContext } from '../core/GameContext';
 import { SKIN_TONES, HAIR_COLORS, OUTFIT_PRIMARY } from '../art/Palette';
-import { DISCOVERIES } from '../content';
+import { DISCOVERIES, heartsForHat, heartsForOutfit, type Milestone } from '../content';
 import { PRODUCT_FULL_GAME } from '../monetization/IStore';
 import type { CharacterAppearance } from '../save/SaveSchema';
 import type { DaySummary } from '../core/EventBus';
@@ -52,10 +52,27 @@ export function buildCustomizeScreen(
   appearance: CharacterAppearance,
   onChange: (next: CharacterAppearance) => void,
   onDone: (final: CharacterAppearance) => void,
+  /**
+   * 'create' is first launch: who you are. 'wardrobe' is getting dressed:
+   * only what you wear, and no changing your skin or who you are.
+   */
+  mode: 'create' | 'wardrobe' = 'create',
 ): Screen {
   const working: CharacterAppearance = { ...appearance };
+  const hearts = ctx.save.save.hearts;
 
   const notify = (): void => onChange({ ...working });
+
+  // Earned items are shown from the start with a lock and the heart count,
+  // so a child can see what is coming. Tapping one says how many more.
+  const lockedTap = (needed: number): void => {
+    ctx.audio.play('error');
+    ctx.bus.emit('ui:toast', {
+      textKey: 'toast.locked',
+      icon: '🔒',
+      params: { hearts: Math.max(1, needed - hearts) },
+    });
+  };
 
   const presetRow = row(ctx, 'actor.child', [
     chips(
@@ -96,10 +113,27 @@ export function buildCustomizeScreen(
   const hairStyleRow = row(ctx, 'welcome.hair', [hairPicker.node]);
 
   const outfitRow = row(ctx, 'welcome.outfit', [
-    swatches(OUTFIT_PRIMARY as unknown as string[], working.outfit, (index) => {
-      working.outfit = index;
-      notify();
-    }),
+    swatches(
+      OUTFIT_PRIMARY as unknown as string[],
+      working.outfit,
+      (index) => {
+        working.outfit = index;
+        notify();
+      },
+      { hearts, needed: heartsForOutfit, onLocked: lockedTap },
+    ),
+  ]);
+
+  const hatRow = row(ctx, 'welcome.hat', [
+    iconChoices(
+      HAT_ICONS,
+      working.hat ?? 0,
+      (index) => {
+        working.hat = index;
+        notify();
+      },
+      { hearts, needed: heartsForHat, onLocked: lockedTap },
+    ),
   ]);
 
   const startButton = el('button', {
@@ -107,17 +141,19 @@ export function buildCustomizeScreen(
     text: ctx.loc.t('welcome.start'),
   });
 
+  const rows =
+    mode === 'wardrobe'
+      ? [hairStyleRow, hairColorRow, outfitRow, hatRow]
+      : // No hats on the first screen: none are earned yet, and a row of
+        // locks is not the welcome a new player should get.
+        [presetRow, skinRow, hairStyleRow, hairColorRow, outfitRow];
+  if (mode === 'wardrobe') startButton.textContent = ctx.loc.t('wardrobe.done');
+
   const node = shell(
     ctx,
-    'welcome.title',
+    mode === 'wardrobe' ? 'wardrobe.title' : 'welcome.title',
     [
-      el('div', { class: 'customize' }, [
-        presetRow,
-        skinRow,
-        hairStyleRow,
-        hairColorRow,
-        outfitRow,
-      ]),
+      el('div', { class: 'customize' }, rows),
       el('div', { class: 'screen__actions' }, [startButton]),
     ],
     { dismissable: false, side: true },
@@ -211,20 +247,69 @@ function hairSvg(style: number, skin: string, hair: string): string {
   return `<svg viewBox="0 0 48 48" width="100%" height="100%" aria-hidden="true">${back}${face}${front}</svg>`;
 }
 
+interface LockRule {
+  hearts: number;
+  /** Hearts an option needs; 0 = free. */
+  needed: (index: number) => number;
+  onLocked: (needed: number) => void;
+}
+
+const HAT_ICONS = ['🙂', '👒', '🌼', '🧶', '👑'];
+
+/** Big picture buttons, used for hats. Same lock rules as the swatches. */
+function iconChoices(
+  icons: readonly string[],
+  selected: number,
+  onPick: (index: number) => void,
+  lock: LockRule,
+): HTMLElement {
+  const container = el('div', { class: 'chips' });
+  icons.forEach((icon, index) => {
+    const needed = lock.needed(index);
+    const locked = needed > lock.hearts;
+    const button = el('button', {
+      class: `chip chip--portrait chip--icon${locked ? ' is-locked' : ''}`,
+      'aria-pressed': String(index === selected),
+      'aria-label': `${index + 1}`,
+    }, [
+      el('span', { text: icon }),
+      locked ? el('span', { class: 'lock-badge', text: `❤${needed}` }) : null,
+    ]);
+    onTap(button, () => {
+      if (locked) {
+        lock.onLocked(needed);
+        return;
+      }
+      container.querySelectorAll('.chip').forEach((c) => c.setAttribute('aria-pressed', 'false'));
+      button.setAttribute('aria-pressed', 'true');
+      onPick(index);
+    });
+    container.appendChild(button);
+  });
+  return container;
+}
+
 function swatches(
   colors: readonly string[],
   selected: number,
   onPick: (index: number) => void,
+  lock?: LockRule,
 ): HTMLElement {
   const container = el('div', { class: 'swatches' });
   colors.forEach((hex, index) => {
+    const needed = lock?.needed(index) ?? 0;
+    const locked = lock !== undefined && needed > lock.hearts;
     const button = el('button', {
-      class: 'swatch',
+      class: `swatch${locked ? ' is-locked' : ''}`,
       style: `background:${hex}`,
       'aria-pressed': String(index === selected),
       'aria-label': `${index + 1}`,
-    });
+    }, locked ? [el('span', { class: 'lock-badge', text: `❤${needed}` })] : []);
     onTap(button, () => {
+      if (locked) {
+        lock.onLocked(needed);
+        return;
+      }
       container.querySelectorAll('.swatch').forEach((s) => s.setAttribute('aria-pressed', 'false'));
       button.setAttribute('aria-pressed', 'true');
       onPick(index);
@@ -254,6 +339,53 @@ function chips(
     container.appendChild(button);
   }
   return container;
+}
+
+/* ------------------------------------------------------------------ */
+/* Milestone                                                           */
+/* ------------------------------------------------------------------ */
+
+/**
+ * "Something new!" — one card per milestone, played once. Wardrobe rewards
+ * offer to try the new thing on straight away; farm rewards are already
+ * standing in the world, with the camera looking at them.
+ */
+export function buildMilestoneScreen(
+  ctx: GameContext,
+  milestone: Milestone,
+  handlers: { onTryOn?: () => void; onClose: () => void },
+): Screen {
+  const close = el('button', {
+    class: `btn ${handlers.onTryOn ? '' : 'btn--primary '}btn--wide`,
+    text: ctx.loc.t('milestone.ok'),
+  });
+  const actions: HTMLElement[] = [];
+  if (handlers.onTryOn) {
+    const tryOn = el('button', { class: 'btn btn--primary btn--wide', text: ctx.loc.t('milestone.tryon') });
+    onTap(tryOn, () => {
+      ctx.audio.play('confirm');
+      handlers.onTryOn?.();
+    });
+    actions.push(tryOn);
+  }
+  actions.push(close);
+  onTap(close, () => {
+    ctx.audio.play('tap');
+    handlers.onClose();
+  });
+
+  const node = shell(
+    ctx,
+    'milestone.title',
+    [
+      el('div', { class: 'milestone__icon', text: milestone.icon }),
+      el('p', { class: 'screen__body milestone__text', text: ctx.loc.t(`milestone.${milestone.id}`) }),
+      el('div', { class: 'screen__actions milestone__actions' }, actions),
+    ],
+    { dismissable: false },
+  );
+  node.classList.add('screen--celebrate');
+  return { node };
 }
 
 /* ------------------------------------------------------------------ */
