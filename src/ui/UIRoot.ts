@@ -92,7 +92,12 @@ export class UIRoot {
     return this.stack.some((entry) => entry.id === id);
   }
 
-  setFade(on: boolean): void {
+  /**
+   * Fades the world to black and back. `quick` is for cuts (a blink while the
+   * child is moved), as opposed to the slow bedtime fade.
+   */
+  setFade(on: boolean, quick = false): void {
+    this.fade.classList.toggle('fade--quick', quick);
     this.fade.classList.toggle('on', on);
   }
 

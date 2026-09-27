@@ -158,6 +158,13 @@ export interface SurfaceOptions {
   detailStrength?: number;
   /** Per-material rim multiplier; 0 disables. */
   rim?: number;
+  /**
+   * Viewer fill, 0..1. Where the surface faces the camera, the lit colour is
+   * pulled this far back toward its own albedo. Stands in for the fill light a
+   * cartoon always has on its characters' faces: without it a backlit child in
+   * warm morning light reads as one flat orange shape.
+   */
+  fill?: number;
   /** Vertex-shader wind sway strength. 0 disables. */
   wind?: number;
   /** Vertex AO is read from the `aAO` attribute; set false for geometry without it. */
@@ -246,8 +253,10 @@ function applyPatches(material: PatchedMaterial, options: SurfaceOptions): void 
   const useDetail = detailEnabled && !!options.detail && !options.unlit;
   const useRim = rimEnabled && !options.unlit && (options.rim ?? 1) > 0;
   const useWind = (options.wind ?? 0) > 0;
+  const useFill = !options.unlit && (options.fill ?? 0) > 0;
+  const needsWorld = useDetail || useRim || useFill;
 
-  if (!useAO && !useDetail && !useRim && !useWind) return;
+  if (!useAO && !useDetail && !useRim && !useWind && !useFill) return;
 
   const detailMap = useDetail ? detailTexture(options.detail!) : null;
   const detailScale = options.detailScale ?? 1.4;
@@ -267,6 +276,7 @@ function applyPatches(material: PatchedMaterial, options: SurfaceOptions): void 
     shader.uniforms.uDetailScale = { value: detailScale };
     shader.uniforms.uDetailStrength = { value: detailStrength };
     shader.uniforms.uWindLocal = { value: windStrength };
+    shader.uniforms.uFill = { value: options.fill ?? 0 };
 
     /* ---------------- vertex ---------------- */
 
@@ -277,7 +287,7 @@ function applyPatches(material: PatchedMaterial, options: SurfaceOptions): void 
       vertexHead += '\nattribute float aAO;\nvarying float vAO;';
       vertexBody += '\n  vAO = aAO;';
     }
-    if (useDetail || useRim) {
+    if (needsWorld) {
       vertexHead += '\nvarying vec3 vWorldPos;\nvarying vec3 vWorldNormal;';
     }
     if (useWind) {
@@ -319,7 +329,7 @@ function applyPatches(material: PatchedMaterial, options: SurfaceOptions): void 
       );
     }
 
-    if (useDetail || useRim) {
+    if (needsWorld) {
       // worldpos_vertex runs after the instance/skin transform, so this is
       // correct for instanced meshes too.
       shader.vertexShader = shader.vertexShader.replace(
@@ -341,7 +351,8 @@ function applyPatches(material: PatchedMaterial, options: SurfaceOptions): void 
 
     let fragmentHead = '';
     if (useAO) fragmentHead += '\nvarying float vAO;\nuniform float uAOStrength;';
-    if (useDetail || useRim) fragmentHead += '\nvarying vec3 vWorldPos;\nvarying vec3 vWorldNormal;';
+    if (needsWorld) fragmentHead += '\nvarying vec3 vWorldPos;\nvarying vec3 vWorldNormal;';
+    if (useFill) fragmentHead += '\nuniform float uFill;';
     if (useDetail) {
       fragmentHead +=
         '\nuniform sampler2D uDetailMap;\nuniform float uDetailScale;\nuniform float uDetailStrength;';
@@ -391,6 +402,31 @@ function applyPatches(material: PatchedMaterial, options: SurfaceOptions): void 
       );
     }
 
+    if (useFill) {
+      // Before the rim, so the rim still brightens the edge on top.
+      shader.fragmentShader = shader.fragmentShader.replace(
+        '#include <dithering_fragment>',
+        `{
+          vec3 fillView = normalize(cameraPosition - vWorldPos);
+          // sqrt widens the falloff so the whole face, not just the tip of the
+          // nose, gets it; the silhouette edge still keeps the scene's light.
+          float facing = sqrt(clamp(dot(fillView, normalize(vWorldNormal)), 0.0, 1.0));
+          // This runs after colorspace_fragment, so the albedo is converted to
+          // the same output space before the two are compared.
+          vec3 albedo = linearToOutputTexel(vec4(diffuseColor.rgb, 1.0)).rgb;
+          // Keep the brightness the light gave it (within limits) but restore
+          // the albedo's hue: a warm lamp or a low sun should warm a face, not
+          // turn pale skin and brown hair into the same orange.
+          const vec3 luma = vec3(0.2126, 0.7152, 0.0722);
+          float lit = dot(gl_FragColor.rgb, luma);
+          float base = max(dot(albedo, luma), 1e-3);
+          vec3 target = albedo * clamp(lit / base, 0.92, 1.12);
+          gl_FragColor.rgb = mix(gl_FragColor.rgb, target, uFill * facing);
+        }
+        #include <dithering_fragment>`,
+      );
+    }
+
     if (useRim) {
       shader.fragmentShader = shader.fragmentShader.replace(
         '#include <dithering_fragment>',
@@ -409,7 +445,7 @@ function applyPatches(material: PatchedMaterial, options: SurfaceOptions): void 
 
   // Materials with different patches must not share a compiled program.
   material.customProgramCacheKey = () =>
-    `lad|${useAO ? 1 : 0}${useDetail ? options.detail : 0}${useRim ? rimScale : 0}${useWind ? windStrength : 0}`;
+    `lad|${useAO ? 1 : 0}${useDetail ? options.detail : 0}${useRim ? rimScale : 0}${useWind ? windStrength : 0}${useFill ? 'f' : ''}`;
 }
 
 /* ------------------------------------------------------------------ */
@@ -444,6 +480,9 @@ export const M = {
       // The head already supplies the rim; a second one on the decal would
       // double it up exactly where the face is most visible.
       rim: 0,
+      // Same fill as the skin under it, or the eyes would sit in shadow on a
+      // lifted face.
+      fill: 0.75,
     }),
 
   creature: () =>
@@ -453,6 +492,7 @@ export const M = {
       detailScale: 2.6,
       detailStrength: 0.3,
       rim: 1.35,
+      fill: 0.75,
     }),
 
   cloth: () =>

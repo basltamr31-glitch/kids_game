@@ -10,6 +10,7 @@ import { AudioManager } from './audio/AudioManager';
 import { Entitlements } from './monetization/Entitlements';
 import { DevStore } from './monetization/IStore';
 import { validateContent } from './content';
+import { CrashLog } from './core/CrashLog';
 
 /**
  * Entry point.
@@ -33,10 +34,15 @@ async function boot(): Promise<void> {
     return;
   }
 
+  let crashLog: CrashLog | null = null;
   try {
     /* --- 1. platform --- */
     const platform = await createPlatform();
     await platform.init();
+    // Straight after storage, so even a failure later in boot is recorded.
+    crashLog = new CrashLog(platform);
+    await crashLog.load();
+    crashLog.install();
     await platform.lockOrientation('landscape');
     await platform.setStatusBarHidden(true);
 
@@ -75,6 +81,7 @@ async function boot(): Promise<void> {
       loc,
       audio,
       entitlements,
+      crashLog,
       worldRng: new Rng(save.save.worldSeed),
       quality: qualityFor(tier),
       formFactor: detectFormFactor(),
@@ -123,6 +130,7 @@ async function boot(): Promise<void> {
     });
   } catch (error) {
     console.error('[Boot] failed', error);
+    crashLog?.record(error);
     showFatalError(
       error instanceof Error ? error.message : 'Something went wrong starting the game.',
     );

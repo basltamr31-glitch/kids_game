@@ -153,6 +153,24 @@ by walking near them — they are never a task.
 
 ---
 
+## Add a heart reward
+
+Add a row to `MILESTONES` in `src/content/Milestones.ts` and a
+`milestone.<id>` line in all six locales. Keep thresholds rising; the tests
+check it.
+
+- **A hat:** add a case to `buildHat` in `src/characters/CharacterRig.ts`, an
+  icon to `HAT_ICONS` in `src/ui/Screens.ts`, and raise `HAT_COUNT`.
+- **An outfit:** append a colour pair to `outfitPrimary` / `outfitSecondary`
+  in `src/art/Palette.ts`.
+- **A farm feature:** add it to `FarmFeature`, then a placement and a mesh in
+  `src/world/FarmFeatures.ts`. Placement is a preferred spot; the builder
+  nudges it to clear ground and registers it as solid.
+
+Nothing needs migrating: what is unlocked comes from the heart total.
+
+---
+
 ## Add an area
 
 1. Add to `AREAS` in `src/content/Items.ts` with its ground-plane bounds.

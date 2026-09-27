@@ -31,6 +31,9 @@ import { ParentReactions } from '../gameplay/ParentReactions';
 import type { SuggestionContext } from '../gameplay/Suggestions';
 import { buildHouseInteractions, type HouseState } from '../world/HouseInteractions';
 import { buildFarmInteractions, type FarmState } from '../world/FarmInteractions';
+import { FarmFeatures } from '../world/FarmFeatures';
+import { Storybook } from '../gameplay/Storybook';
+import { CHALET_DIVIDERS } from '../world/Buildings';
 import { AnimalAgent } from '../animals/AnimalAgent';
 import { FamilyAgent } from '../characters/FamilyAgent';
 
@@ -40,6 +43,9 @@ import {
   DISCOVERIES_BY_ID,
   AREAS_BY_ID,
   ITEMS_BY_ID,
+  ACTIVITIES_BY_ID,
+  MILESTONES,
+  farmFeaturesAt,
 } from '../content';
 import type { AnimalSaveState } from '../save/SaveSchema';
 
@@ -48,6 +54,8 @@ import { Hud } from '../ui/Hud';
 import { ResponsiveLayout } from '../ui/ResponsiveLayout';
 import {
   buildCustomizeScreen,
+  buildTitleScreen,
+  buildMilestoneScreen,
   buildDayEndScreen,
   buildNatureBookScreen,
   buildParentGateScreen,
@@ -67,6 +75,9 @@ import { APP_VERSION, LINKS } from './Config';
  * `src/gameplay`.
  */
 const _animalBodies: { x: number; z: number; r: number }[] = [];
+
+const SEASON_ICON: Record<string, string> = { spring: '🌷', summer: '🌻', autumn: '🍂', winter: '⛄' };
+const WEATHER_ICON: Record<string, string> = { sunny: '☀️', cloudy: '⛅', rain: '🌧️', snow: '❄️', fog: '🌫️' };
 
 export class Game {
   private ctx: GameContext;
@@ -101,6 +112,11 @@ export class Game {
   private rafHandle = 0;
   private windTime = 0;
   private dayEnding = false;
+  private farmFeatures!: FarmFeatures;
+  private celebrating = false;
+  private storybook = new Storybook();
+  private milestoneTimer = 1;
+  private playerIndoors = false;
   private discoveryTargets: { id: string; position: Vector3; found: boolean }[] = [];
   private interiorLightTarget = new Vector3();
 
@@ -146,6 +162,7 @@ export class Game {
     this.layout.apply();
     ctx.formFactor = this.layout.formFactor;
     document.body.classList.toggle('reduced-motion', ctx.save.settings.reducedMotion);
+    document.body.classList.toggle('left-handed', ctx.save.settings.leftHanded);
 
     /* --- surface detail --- */
     // Generated once, before any geometry asks for them, so nothing hitches
@@ -174,6 +191,11 @@ export class Game {
     /* --- camera & input --- */
     this.cameraRig = new CameraRig(window.innerWidth / window.innerHeight, ctx.formFactor);
     this.input = new InputManager(this.renderer.domElement);
+    // While dressing up, the child keeps facing the camera as it steps round
+    // furniture to keep them in view.
+    this.cameraRig.onAvoid = (theta) => {
+      if (this.ui?.has('wardrobe')) this.player.turnTo(theta);
+    };
 
     /* --- the child --- */
     // Spawn in the open farmyard looking north up the valley. The porch would
@@ -212,6 +234,9 @@ export class Game {
     // offers. That is the whole coupling between them.
     this.runner = new InteractionRunner(ctx, this.player);
     const chalet = this.world.cutaways[0];
+    // Whatever the hearts have already earned is standing there on load.
+    this.farmFeatures = new FarmFeatures(this.world);
+    this.farmFeatures.sync(farmFeaturesAt(ctx.save.save.hearts));
     this.house = buildHouseInteractions(
       this.registry,
       () => this.runner.carriedProp,
@@ -234,6 +259,12 @@ export class Game {
       this.world.nav.rebuild();
 
       this.cameraRig.setCollision(this.world.collision);
+      const house = this.world.cutaways[0]?.centre;
+      if (house) {
+        this.cameraRig.setOccluders(
+          CHALET_DIVIDERS.map((d) => ({ x: house.x + d.x, z: house.z + d.z, hx: d.w / 2, hz: d.d / 2 })),
+        );
+      }
       this.player.setDoor(this.house.door);
       this.player.onDoorOpened = () => this.ctx.audio.play('door');
       this.house.door.placeAt(
@@ -324,13 +355,13 @@ export class Game {
 
     this.onResize();
 
-    /* --- first launch: choose who you are --- */
-    if (ctx.save.isFreshSave) {
-      this.openCustomize();
-    } else {
+    /* --- title, then (first launch only) choose who you are --- */
+    const fresh = ctx.save.isFreshSave;
+    if (!fresh) {
       this.director.beginDay();
       this.syncPhaseDependents();
     }
+    this.openTitle(fresh);
 
     this.seedDiscoveries();
     ctx.bus.emit('game:ready');
@@ -377,7 +408,14 @@ export class Game {
   private wireEvents(): void {
     const ctx = this.ctx;
 
-    ctx.bus.on('activity:completed', () => {
+    ctx.bus.on('activity:completed', ({ activityId }) => {
+      this.storybook.request(activityId);
+      // Getting dressed means choosing what to wear.
+      if (activityId === 'getdressed') {
+        window.setTimeout(() => {
+          if (!this.dayEnding && this.ui.modalCount === 0) this.openWardrobe();
+        }, 500);
+      }
       const result = this.director.onActivityCompleted();
       if (result.phaseChanged) this.syncPhaseDependents();
       if (result.dayComplete && !this.dayEnding) this.finishDay();
@@ -473,6 +511,7 @@ export class Game {
     this.dayEnding = true;
     this.ui.setFade(true);
     this.ctx.audio.play('sleep');
+    this.ctx.audio.playLullaby();
 
     window.setTimeout(() => {
       const summary = this.director.endDay();
@@ -486,8 +525,12 @@ export class Game {
         season: summary.season,
       }, () => {
         this.ui.pop('dayend');
+        this.storybook.clear();
         this.startNextDay();
-      });
+      }, this.storybook.pick(3).map((shot) => ({
+        ...shot,
+        caption: this.ctx.loc.t(ACTIVITIES_BY_ID.get(shot.activityId)?.titleKey ?? 'app.title'),
+      })));
       this.ui.push(screen, 'dayend');
       this.ctx.audio.play('reward');
     }, 1800);
@@ -497,6 +540,7 @@ export class Game {
     const ctx = this.ctx;
     const save = ctx.save.save;
     const previousSeason = this.director.currentPlan.season;
+    const previousWeather = save.weather;
 
     // Overnight: animals rest, feed, refill.
     const nightRng = ctx.worldRng.fork(`night-${save.day}`);
@@ -525,19 +569,115 @@ export class Game {
     this.syncPhaseDependents();
     this.seedDiscoveries();
 
-    // Put the child back in bed, then let them get up.
-    const bed = this.world.anchors.get('bed');
-    if (bed) {
-      this.player.position.copy(bed.position);
-      this.player.group.position.copy(bed.position);
-    }
-    this.player.setExpression('sleepy');
-    this.cameraRig.clearFocus();
-
     this.dayEnding = false;
+    this.wakeInBed();
     this.ui.setFade(false);
     ctx.audio.play('wake');
     this.hud.refreshTasks();
+    this.announceMorning(previousSeason, previousWeather);
+  }
+
+  /**
+   * What is new this morning: a new season, or different weather, told once
+   * the child is up. Seasons and first snow also leave a sticker, so they
+   * become things to collect as well as things that happen.
+   */
+  private announceMorning(previousSeason: string, previousWeather: string): void {
+    const ctx = this.ctx;
+    const { season, weather } = ctx.save.save;
+    const earned: string[] = [];
+    ctx.save.update((data) => {
+      const add = (id: string): void => {
+        if (!data.stickers.includes(id)) {
+          data.stickers.push(id);
+          earned.push(id);
+        }
+      };
+      if (weather === 'snow') add('firstsnow');
+      if (weather === 'rain') add('rainyday');
+      if (season !== 'summer') add(season);
+    });
+
+    const line =
+      season !== previousSeason
+        ? { key: `season.${season}`, icon: SEASON_ICON[season] ?? '🌿' }
+        : weather !== previousWeather
+          ? { key: `morning.${weather}`, icon: WEATHER_ICON[weather] ?? '☀️' }
+          : null;
+
+    window.setTimeout(() => {
+      if (this.dayEnding) return;
+      if (line) {
+        this.hud.showToast(line.key, line.icon);
+        this.hud.say(ctx.loc.t(line.key));
+      }
+      if (earned.length) {
+        ctx.audio.play('sticker');
+        ctx.bus.emit('ui:toast', { textKey: 'toast.sticker', icon: '⭐' });
+      }
+    }, 3200);
+  }
+
+  /**
+   * Starts the morning beside the bed, then gets up on its own.
+   *
+   * Getting out of bed is not a chore to go and find: the child is standing
+   * next to it, sleepy, framed by a camera already in the room, and a moment
+   * later stretches and the day begins. Does nothing once today's wake-up has
+   * happened, so resuming mid-morning leaves the child where the day put them.
+   */
+  private wakeInBed(): void {
+    const wakeup = this.director.remainingToday.find((a) => a.id === 'wakeup');
+    const bed = this.registry.get('bed');
+    if (!wakeup || !bed) return;
+
+    // The child turns back toward the bed they just climbed out of, and the
+    // camera looks at them across it: the first shot of the day is a sleepy
+    // face in their own bedroom, not the back of their head.
+    const bedPoint = bed.node.getWorldPosition(new Vector3());
+    const bedside = this.freeSpotNear(this.house.bedside(), bedPoint);
+    const facing = Math.atan2(bedPoint.x - bedside.x, bedPoint.z - bedside.z);
+    this.player.placeAt(bedside, facing);
+    this.player.setExpression('sleepy');
+    this.cameraRig.snapTo(this.player.position, this.player.height, facing, true);
+    // Settle the camera and the ghosted walls now rather than over the next
+    // half-second, so the first frame after the fade is already composed.
+    this.cameraRig.update(this.player.position, this.player.height, this.world.terrain, 1 / 60);
+    updateCutaways(this.world, this.player.position, this.cameraRig.camera.position, 10);
+
+    window.setTimeout(() => {
+      if (this.dayEnding || this.ui.modalCount > 0) return;
+      if (!this.director.remainingToday.some((a) => a.id === 'wakeup')) return;
+      this.interaction.tryStart(wakeup);
+    }, 1400);
+  }
+
+  /**
+   * The nearest point to `preferred` where the child fits, searched in rings.
+   * Furniture moves about as the house is dressed, so a fixed offset from the
+   * bed can land inside the bedside table. Prefers points away from `avoid`.
+   */
+  private freeSpotNear(preferred: Vector3, avoid: Vector3): Vector3 {
+    const collision = this.world.collision;
+    if (!collision.blocks(preferred.x, preferred.z, 0.3, 'animal')) return preferred;
+    for (let ring = 1; ring <= 10; ring++) {
+      const radius = ring * 0.2;
+      let best: Vector3 | null = null;
+      let bestDistance = -Infinity;
+      for (let i = 0; i < 16; i++) {
+        const angle = (i / 16) * Math.PI * 2;
+        const x = preferred.x + Math.sin(angle) * radius;
+        const z = preferred.z + Math.cos(angle) * radius;
+        if (collision.blocks(x, z, 0.3, 'animal')) continue;
+        const fromBed = Math.hypot(x - avoid.x, z - avoid.z);
+        if (fromBed > bestDistance) {
+          bestDistance = fromBed;
+          best = new Vector3(x, preferred.y, z);
+        }
+      }
+      if (best) return best;
+    }
+    return preferred;
   }
 
   /**
@@ -594,8 +734,136 @@ export class Game {
   /* Screens                                                             */
   /* ------------------------------------------------------------------ */
 
+  private openTitle(fresh: boolean): void {
+    const ctx = this.ctx;
+    this.hud.setVisible(false);
+    this.cameraRig.setCinematic(true);
+    const screen = buildTitleScreen(
+      ctx,
+      { day: ctx.save.save.day, returning: !fresh },
+      () => {
+        void ctx.audio.start();
+        this.ui.pop('title');
+        this.cameraRig.setCinematic(false);
+        if (fresh) {
+          this.openCustomize();
+        } else {
+          this.blinkTo(() => this.wakeInBed());
+        }
+      },
+    );
+    this.ui.push(screen, 'title');
+  }
+
+  /**
+   * A short fade to black, `during` runs in the dark, then back with the HUD.
+   * For cuts the player should not see happen: moving the child to their bed.
+   */
+  private blinkTo(during: () => void): void {
+    this.ui.setFade(true, true);
+    window.setTimeout(() => {
+      during();
+      this.hud.setVisible(true);
+      this.hud.refreshTasks();
+      this.ui.setFade(false, true);
+    }, 380);
+  }
+
+  /**
+   * Getting dressed: the same creator in wardrobe mode, for what the child
+   * wears only. Opened after the morning "get dressed" chore and from a new
+   * hat or outfit's "Try it on!".
+   */
+  private openWardrobe(): void {
+    const ctx = this.ctx;
+    if (this.ui.has('wardrobe')) return;
+    this.hud.setVisible(false);
+    // Turn to face the camera where it already is rather than swinging the
+    // camera round to the child's front: indoors, the front is often a wall,
+    // and the current angle is known to have a clear view.
+    const theta = this.cameraRig.orbitTheta;
+    this.player.turnTo(theta);
+    this.cameraRig.setPortrait(theta);
+    const screen = buildCustomizeScreen(
+      ctx,
+      ctx.save.save.child,
+      (next) => this.rebuildPlayer(next),
+      (final) => {
+        ctx.save.update((data) => {
+          data.child = final;
+        });
+        void ctx.save.flush(true);
+        this.ui.pop('wardrobe');
+        this.cameraRig.setPortrait(null);
+        this.hud.setVisible(true);
+        ctx.bus.emit('emote', { actor: 'child', emote: '✨' });
+      },
+      'wardrobe',
+    );
+    this.ui.push(screen, 'wardrobe');
+  }
+
+  /**
+   * Plays the next uncelebrated heart milestone, if the moment is right: not
+   * mid-chore, not behind another panel, not while falling asleep. A farm
+   * feature appears in the world first and the camera turns to it, then the
+   * card follows, so the child sees the thing before being told about it.
+   */
+  private checkMilestones(): void {
+    if (this.celebrating || this.dayEnding) return;
+    if (this.activities.isRunning || this.runner.isRunning || this.ui.modalCount > 0 || !this.hud.isVisible) return;
+    const save = this.ctx.save.save;
+    const milestone = MILESTONES.find(
+      (m) => save.hearts >= m.hearts && !save.milestonesSeen.includes(m.id),
+    );
+    if (!milestone) return;
+
+    this.celebrating = true;
+    this.ctx.save.update((data) => {
+      data.milestonesSeen.push(milestone.id);
+    });
+
+    const reward = milestone.reward;
+    let delay = 600;
+    if (reward.kind === 'farm') {
+      this.farmFeatures.sync(farmFeaturesAt(save.hearts));
+      const where = this.farmFeatures.positionOf(reward.feature);
+      if (where && !this.playerIndoors) {
+        this.cameraRig.focusOn(where, 4.5);
+        delay = 2200;
+      }
+    }
+
+    window.setTimeout(() => {
+      this.ctx.audio.play('discovery');
+      this.hud.say(this.ctx.loc.t(`milestone.${milestone.id}`));
+      const wearable = reward.kind === 'hat' || reward.kind === 'outfit';
+      const screen = buildMilestoneScreen(this.ctx, milestone, {
+        onTryOn: wearable
+          ? () => {
+              this.ui.pop('milestone');
+              this.celebrating = false;
+              this.ctx.save.update((data) => {
+                if (reward.kind === 'hat') data.child.hat = reward.hat;
+                if (reward.kind === 'outfit') data.child.outfit = reward.outfit;
+              });
+              this.rebuildPlayer(this.ctx.save.save.child);
+              this.openWardrobe();
+            }
+          : undefined,
+        onClose: () => {
+          this.ui.pop('milestone');
+          this.celebrating = false;
+        },
+      });
+      this.ui.push(screen, 'milestone');
+    }, delay);
+  }
+
   private openCustomize(): void {
     const ctx = this.ctx;
+    this.hud.setVisible(false);
+    this.cameraRig.setPortrait(this.player.facingAngle);
     const screen = buildCustomizeScreen(
       ctx,
       ctx.save.save.child,
@@ -606,12 +874,18 @@ export class Game {
       (final) => {
         ctx.save.update((data) => {
           data.child = final;
+          // Having chosen who they are, the child is no longer new: closing
+          // the app during day 1 must not send them back to this screen.
+          data.tutorialDone = true;
         });
         void ctx.save.flush(true);
         this.ui.pop('customize');
+        this.cameraRig.setPortrait(null);
         this.director.beginDay();
         this.syncPhaseDependents();
-        this.hud.refreshTasks();
+        // The first day starts where every day does. The swap happens in a
+        // blink so the child is never seen jumping from yard to bedroom.
+        this.blinkTo(() => this.wakeInBed());
       },
     );
     this.ui.push(screen, 'customize');
@@ -859,6 +1133,7 @@ export class Game {
     this.qualityMonitor.sample(rawDelta, now);
     this.update(dt);
     this.renderer.render(this.scene, this.cameraRig.camera);
+    if (this.storybook.tick(dt)) this.storybook.capture(this.renderer.domElement);
   };
 
   private update(dt: number): void {
@@ -887,6 +1162,12 @@ export class Game {
 
     this.registry.update(dt);
     this.house.update(dt, this.player.position);
+    this.farmFeatures.update(dt);
+    this.milestoneTimer -= dt;
+    if (this.milestoneTimer <= 0) {
+      this.milestoneTimer = 0.5;
+      this.checkMilestones();
+    }
     this.runner.update(dt);
     this.activities.update(dt);
     this.notices.update(dt, this.runner.isRunning || this.activities.isRunning);
@@ -930,18 +1211,25 @@ export class Game {
       this.cameraRig.camera.position,
       dt,
     );
-    // The interior lamp sits a little above the child's head, in the room they
-    // are actually standing in.
+    // The interior lamp lights the room the child is standing in. It hangs high
+    // and a little toward the camera: directly over the head it burnt the hair
+    // and face out to a flat orange blob, and from the front it lights the face,
+    // which is what the child is looking at.
+    const camera = this.cameraRig.camera.position;
+    const towardX = camera.x - this.player.position.x;
+    const towardZ = camera.z - this.player.position.z;
+    const toward = Math.hypot(towardX, towardZ) || 1;
     this.interiorLightTarget.set(
-      this.player.position.x,
-      this.player.position.y + 2.0,
-      this.player.position.z,
+      this.player.position.x + (towardX / toward) * 1.2,
+      this.player.position.y + 2.8,
+      this.player.position.z + (towardZ / toward) * 1.2,
     );
     this.weather.setInterior(this.interiorLightTarget, insideBuilding ? 1 : 0, dt);
     // Same signal drives the camera: walls ghosting, the boom coming in, and
     // the orbit swinging round to the building's open face are one event, so
     // they can never disagree.
     this.cameraRig.setIndoor(insideBuilding, dt);
+    this.playerIndoors = insideBuilding !== null;
 
     // Stream ambience by proximity.
     const distanceToStream = Math.abs(this.player.position.z - 68);

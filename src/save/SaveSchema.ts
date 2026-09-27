@@ -9,7 +9,7 @@
  *    worst bug this project can ship.
  */
 
-export const SAVE_VERSION = 3;
+export const SAVE_VERSION = 4;
 export const SAVE_KEY = 'lad.save.v1'; // key is stable; the *contents* are versioned
 export const SETTINGS_KEY = 'lad.settings.v1';
 
@@ -23,6 +23,8 @@ export interface CharacterAppearance {
   hairStyle: number;
   hairColor: number;
   outfit: number;
+  /** 0 = no hat. Hats are earned with hearts; see content/Milestones.ts. */
+  hat: number;
   name: string;
 }
 
@@ -98,6 +100,11 @@ export interface SaveData {
   tutorialDone: boolean;
   /** Ids of one-off story beats already played, so they never repeat. */
   seenStoryBeats: string[];
+  /**
+   * Heart milestones already celebrated. What a milestone unlocks is derived
+   * from the heart total; this only stops the celebration playing twice.
+   */
+  milestonesSeen: string[];
 }
 
 export interface SettingsData {
@@ -115,6 +122,10 @@ export interface SettingsData {
   uiScale: number;
   subtitles: boolean;
   reducedMotion: boolean;
+  /** Reads task names and prompts aloud for children who cannot read yet. */
+  readAloud: boolean;
+  /** Mirrors the HUD left to right, for a child who reaches with the other hand. */
+  leftHanded: boolean;
   /** Premium entitlement cache. Authoritative source is always the store. */
   premiumUnlocked: boolean;
 }
@@ -131,6 +142,7 @@ export function createNewSave(worldSeed: number, now = Date.now()): SaveData {
       hairStyle: 0,
       hairColor: 2,
       outfit: 0,
+      hat: 0,
       name: '',
     },
     day: 1,
@@ -151,6 +163,7 @@ export function createNewSave(worldSeed: number, now = Date.now()): SaveData {
     history: [],
     tutorialDone: false,
     seenStoryBeats: [],
+    milestonesSeen: [],
   };
 }
 
@@ -167,6 +180,8 @@ export function createDefaultSettings(deviceLocale: string): SettingsData {
     uiScale: 1,
     subtitles: true,
     reducedMotion: false,
+    readAloud: true,
+    leftHanded: false,
     premiumUnlocked: false,
   };
 }

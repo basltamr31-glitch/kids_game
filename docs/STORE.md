@@ -44,10 +44,12 @@ published**.
 >
 > **A calm game, made on purpose**
 > • No timers, no scores, no way to lose, no way to be told off
-> • Nothing to read — children play by looking, tapping and listening
+> • Nothing to read: tasks, parents and surprises are read aloud
 > • Every animal has a name and a personality of its own
 > • Rain, snow, fog and sunshine, and four changing seasons
-> • A Nature Book to fill with the things you find
+> • Earn hats, outfits and surprises on the farm: nothing to buy, nothing to lose
+> • An album to fill with the animals, plants and places you find
+> • Every day ends with a little storybook of what you did
 >
 > **For grown-ups**
 > • Works completely offline. No internet needed, ever.
@@ -76,6 +78,21 @@ deliberate — the first two must sell the feeling before the features.
    emotional close.
 
 Overlay a short localized caption on each; keep it to four words.
+
+### Capturing them
+
+```bash
+npm run dev                  # terminal 1
+npm run store:screenshots    # terminal 2: needs Playwright (npm i -D playwright)
+```
+
+This writes `store/screenshots/{phone,tablet-7,tablet-10}/*.png` at 1920×1080,
+1920×1200 and 2560×1600. Each scene sets the game up through the dev-only
+`window.__lad` handle and captures a real frame with the real UI. It currently
+covers the title, the character creator, the first morning, the farmyard and
+the album. Add scenes for the list above as they are framed. Run it on a
+machine with a GPU; software rendering works but is slow and flat.
+Nothing is composited, so the listing never shows something the game does not.
 
 Also needed: a 1024×500 feature graphic (generate from
 `android-res/master/feature-graphic.svg`) and, optionally, a 30-second video —

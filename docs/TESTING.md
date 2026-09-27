@@ -1,7 +1,7 @@
 # Testing
 
 ```bash
-npm test          # 65 tests, ~3s
+npm test          # 74 tests, ~3s
 npm run typecheck # strict TS, noUnusedLocals, noImplicitOverride
 ```
 
@@ -101,6 +101,22 @@ is how it fails, by drawing the wrong conclusion about a plausible device.
 - `reset()` forgets everything, including a half-armed downgrade
 - every tier a downgrade can reach keeps shadows except the floor
 
+### `tests/milestones.test.ts` — 9 tests
+
+Heart milestones are the only progression, so they must be reachable, never
+lost, and never celebrated twice.
+
+- ids are unique and thresholds strictly rise
+- every milestone has a line in every language
+- every hat and outfit a milestone names exists, each is earned exactly once,
+  and every hat and outfit in the palette can be reached
+- the starting look (no hat, the first six outfits) is free
+- unlocks follow the heart total, and the last one leaves nothing "next"
+- **v3 → v4 migration:** an existing player gets a bare head, keeps their
+  outfit and hearts, and has everything they already passed marked as seen,
+  so an update does not fire a burst of old celebrations
+- storybook photos are spread from the first to the last of the day and never
+  repeat an activity
 
 ## What is not covered by automated tests
 
