@@ -25,14 +25,14 @@ function shell(
   ctx: GameContext,
   titleKey: string,
   body: HTMLElement[],
-  options: { dismissable?: boolean; onDismiss?: () => void } = {},
+  options: { dismissable?: boolean; onDismiss?: () => void; side?: boolean } = {},
 ): HTMLElement {
   const card = el('div', { class: 'screen__card', role: 'dialog', 'aria-modal': 'true' }, [
     el('h2', { class: 'screen__title', text: ctx.loc.t(titleKey) }),
     ...body,
   ]);
 
-  const screen = el('div', { class: 'screen' }, [card]);
+  const screen = el('div', { class: options.side ? 'screen screen--side' : 'screen' }, [card]);
 
   if (options.dismissable !== false) {
     // Tapping the dim area closes — but only the dim area, not the card.
@@ -74,6 +74,7 @@ export function buildCustomizeScreen(
   const skinRow = row(ctx, 'welcome.skin', [
     swatches(SKIN_TONES, working.skinTone, (index) => {
       working.skinTone = index;
+      hairPicker.refresh();
       notify();
     }),
   ]);
@@ -81,20 +82,18 @@ export function buildCustomizeScreen(
   const hairColorRow = row(ctx, 'welcome.haircolor', [
     swatches(HAIR_COLORS, working.hairColor, (index) => {
       working.hairColor = index;
+      hairPicker.refresh();
       notify();
     }),
   ]);
 
-  const hairStyleRow = row(ctx, 'welcome.hair', [
-    chips(
-      [0, 1, 2, 3].map((i) => ({ label: ['🧒', '👧', '👱', '🧑‍🦱'][i], value: String(i) })),
-      String(working.hairStyle),
-      (value) => {
-        working.hairStyle = Number(value);
-        notify();
-      },
-    ),
-  ]);
+  // Hair styles are drawn, not emoji: a pre-reader picks by shape, so the
+  // picture has to be the haircut they will actually get, in their colours.
+  const hairPicker = hairStyles(working, (style) => {
+    working.hairStyle = style;
+    notify();
+  });
+  const hairStyleRow = row(ctx, 'welcome.hair', [hairPicker.node]);
 
   const outfitRow = row(ctx, 'welcome.outfit', [
     swatches(OUTFIT_PRIMARY as unknown as string[], working.outfit, (index) => {
@@ -121,7 +120,7 @@ export function buildCustomizeScreen(
       ]),
       el('div', { class: 'screen__actions' }, [startButton]),
     ],
-    { dismissable: false },
+    { dismissable: false, side: true },
   );
 
   onTap(startButton, () => {
@@ -137,6 +136,79 @@ function row(ctx: GameContext, labelKey: string, controls: HTMLElement[]): HTMLE
     el('span', { class: 'customize__label', text: ctx.loc.t(labelKey) }),
     ...controls,
   ]);
+}
+
+/**
+ * The four haircuts as little portraits, redrawn in the chosen skin and hair
+ * colour. Shapes follow `buildHair` in CharacterRig: short and tousled, a bob,
+ * two ponytails, curls.
+ */
+function hairStyles(
+  working: CharacterAppearance,
+  onPick: (style: number) => void,
+): { node: HTMLElement; refresh: () => void } {
+  const container = el('div', { class: 'chips hairstyles' });
+  const buttons: HTMLElement[] = [];
+  const refresh = (): void => {
+    const skin = SKIN_TONES[working.skinTone] ?? SKIN_TONES[0];
+    const hair = HAIR_COLORS[working.hairColor] ?? HAIR_COLORS[0];
+    buttons.forEach((button, style) => {
+      button.innerHTML = hairSvg(style, skin, hair);
+      button.setAttribute('aria-pressed', String(style === working.hairStyle % 4));
+    });
+  };
+  for (let style = 0; style < 4; style++) {
+    const button = el('button', { class: 'chip chip--portrait', 'aria-label': String(style + 1) });
+    onTap(button, () => {
+      working.hairStyle = style;
+      refresh();
+      onPick(style);
+    });
+    buttons.push(button);
+    container.appendChild(button);
+  }
+  refresh();
+  return { node: container, refresh };
+}
+
+function hairSvg(style: number, skin: string, hair: string): string {
+  const face =
+    `<circle cx="24" cy="26" r="13" fill="${skin}"/>` +
+    `<circle cx="19.5" cy="27" r="1.6" fill="#3a2718"/><circle cx="28.5" cy="27" r="1.6" fill="#3a2718"/>` +
+    `<path d="M20.5 32 q3.5 3 7 0" stroke="#3a2718" stroke-width="1.5" fill="none" stroke-linecap="round"/>`;
+  let back = '';
+  let front = '';
+  switch (style) {
+    case 0: // short, tousled, with a cowlick
+      front =
+        `<path d="M10.5 25 C10 12 20 9 25 10 C33 10 38.5 15 37.5 25 C35 20 30 18.5 26 19.5 C22 17.5 15 19 10.5 25Z" fill="${hair}"/>` +
+        `<path d="M25 10.5 q2 -5 5 -5" stroke="${hair}" stroke-width="2.6" fill="none" stroke-linecap="round"/>`;
+      break;
+    case 1: // bob with a blunt fringe
+      back = `<path d="M9 24 C9 11 39 11 39 24 L39.5 36 Q24 40 8.5 36Z" fill="${hair}"/>`;
+      front = `<path d="M11 23 C11 13 37 13 37 23 L37 23.5 L11 23.5Z" fill="${hair}"/>`;
+      break;
+    case 2: // two high ponytails with red bobbles
+      back =
+        `<ellipse cx="7.5" cy="26" rx="4.2" ry="8" transform="rotate(22 7.5 26)" fill="${hair}"/>` +
+        `<ellipse cx="40.5" cy="26" rx="4.2" ry="8" transform="rotate(-22 40.5 26)" fill="${hair}"/>`;
+      front =
+        `<path d="M11 24 C10.5 12.5 37.5 12.5 37 24 C33 19.5 28 18.5 24 20 C20 18.5 15 19.5 11 24Z" fill="${hair}"/>` +
+        `<circle cx="11.2" cy="19" r="2.2" fill="#e0685f"/><circle cx="36.8" cy="19" r="2.2" fill="#e0685f"/>`;
+      break;
+    default: {
+      // curls
+      const puffs: string[] = [];
+      for (let i = 0; i < 9; i++) {
+        const a = Math.PI + (i / 8) * Math.PI;
+        const x = 24 + Math.cos(a) * 13.5;
+        const y = 24 + Math.sin(a) * 12;
+        puffs.push(`<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="4.4" fill="${hair}"/>`);
+      }
+      front = puffs.join('') + `<circle cx="24" cy="14.5" r="6" fill="${hair}"/>`;
+    }
+  }
+  return `<svg viewBox="0 0 48 48" width="100%" height="100%" aria-hidden="true">${back}${face}${front}</svg>`;
 }
 
 function swatches(
@@ -182,6 +254,53 @@ function chips(
     container.appendChild(button);
   }
   return container;
+}
+
+/* ------------------------------------------------------------------ */
+/* Title                                                               */
+/* ------------------------------------------------------------------ */
+
+/**
+ * The first thing on screen at every launch.
+ *
+ * The world is already running behind it on a slow drift, so the title is a
+ * window onto the valley rather than a menu in front of it. One button, the
+ * size of a small hand. The first tap is also what browsers need before they
+ * will play sound, so the game's music starts with the game.
+ */
+export function buildTitleScreen(
+  ctx: GameContext,
+  info: { day: number; returning: boolean },
+  onPlay: () => void,
+): Screen {
+  const play = el(
+    'button',
+    { class: 'title__play', 'aria-label': ctx.loc.t('title.play') },
+    [el('span', { class: 'title__play-icon', html: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5.5v13a1 1 0 0 0 1.5.86l10.2-6.5a1 1 0 0 0 0-1.72L9.5 4.64A1 1 0 0 0 8 5.5Z" fill="currentColor"/></svg>' })],
+  );
+
+  const node = el('div', { class: 'title' }, [
+    el('div', { class: 'title__logo' }, [
+      el('span', { class: 'title__small', text: ctx.loc.t('title.little') }),
+      el('span', { class: 'title__big', text: ctx.loc.t('title.alpinedays') }),
+    ]),
+    el('div', { class: 'title__tagline', text: ctx.loc.t('title.tagline') }),
+    play,
+    info.returning
+      ? el('div', { class: 'title__day', text: ctx.loc.t('hud.day', { day: info.day }) })
+      : null,
+  ]);
+
+  let done = false;
+  onTap(play, () => {
+    if (done) return;
+    done = true;
+    ctx.audio.play('confirm');
+    ctx.platform.haptic('light');
+    onPlay();
+  });
+
+  return { node };
 }
 
 /* ------------------------------------------------------------------ */

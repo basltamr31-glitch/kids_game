@@ -48,6 +48,7 @@ import { Hud } from '../ui/Hud';
 import { ResponsiveLayout } from '../ui/ResponsiveLayout';
 import {
   buildCustomizeScreen,
+  buildTitleScreen,
   buildDayEndScreen,
   buildNatureBookScreen,
   buildParentGateScreen,
@@ -324,14 +325,13 @@ export class Game {
 
     this.onResize();
 
-    /* --- first launch: choose who you are --- */
-    if (ctx.save.isFreshSave) {
-      this.openCustomize();
-    } else {
+    /* --- title, then (first launch only) choose who you are --- */
+    const fresh = ctx.save.isFreshSave;
+    if (!fresh) {
       this.director.beginDay();
       this.syncPhaseDependents();
-      this.wakeInBed();
     }
+    this.openTitle(fresh);
 
     this.seedDiscoveries();
     ctx.bus.emit('game:ready');
@@ -649,8 +649,45 @@ export class Game {
   /* Screens                                                             */
   /* ------------------------------------------------------------------ */
 
+  private openTitle(fresh: boolean): void {
+    const ctx = this.ctx;
+    this.hud.setVisible(false);
+    this.cameraRig.setCinematic(true);
+    const screen = buildTitleScreen(
+      ctx,
+      { day: ctx.save.save.day, returning: !fresh },
+      () => {
+        void ctx.audio.start();
+        this.ui.pop('title');
+        this.cameraRig.setCinematic(false);
+        if (fresh) {
+          this.openCustomize();
+        } else {
+          this.blinkTo(() => this.wakeInBed());
+        }
+      },
+    );
+    this.ui.push(screen, 'title');
+  }
+
+  /**
+   * A short fade to black, `during` runs in the dark, then back with the HUD.
+   * For cuts the player should not see happen: moving the child to their bed.
+   */
+  private blinkTo(during: () => void): void {
+    this.ui.setFade(true, true);
+    window.setTimeout(() => {
+      during();
+      this.hud.setVisible(true);
+      this.hud.refreshTasks();
+      this.ui.setFade(false, true);
+    }, 380);
+  }
+
   private openCustomize(): void {
     const ctx = this.ctx;
+    this.hud.setVisible(false);
+    this.cameraRig.setPortrait(this.player.facingAngle);
     const screen = buildCustomizeScreen(
       ctx,
       ctx.save.save.child,
@@ -661,19 +698,18 @@ export class Game {
       (final) => {
         ctx.save.update((data) => {
           data.child = final;
+          // Having chosen who they are, the child is no longer new: closing
+          // the app during day 1 must not send them back to this screen.
+          data.tutorialDone = true;
         });
         void ctx.save.flush(true);
         this.ui.pop('customize');
+        this.cameraRig.setPortrait(null);
         this.director.beginDay();
         this.syncPhaseDependents();
-        // The first day starts where every day does. The swap happens under a
-        // short fade so the child is never seen jumping from yard to bedroom.
-        this.ui.setFade(true);
-        window.setTimeout(() => {
-          this.wakeInBed();
-          this.ui.setFade(false);
-          this.hud.refreshTasks();
-        }, 450);
+        // The first day starts where every day does. The swap happens in a
+        // blink so the child is never seen jumping from yard to bedroom.
+        this.blinkTo(() => this.wakeInBed());
       },
     );
     this.ui.push(screen, 'customize');

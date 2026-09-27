@@ -16,7 +16,7 @@ import type { FormFactor } from '../core/DeviceProfile';
  * shortens its boom, which looks intentional rather than glitchy.
  */
 
-export type CameraMode = 'follow' | 'focus' | 'cinematic';
+export type CameraMode = 'follow' | 'focus' | 'cinematic' | 'portrait';
 
 /**
  * Pitch used once the child is fully indoors. The boom length comes from the
@@ -57,6 +57,8 @@ export class CameraRig {
   private smoothedTarget = new Vector3();
   private mode: CameraMode = 'follow';
 
+  /** The follow framing to return to after a title drift or a portrait. */
+  private saved = new Spherical(13, MathUtils.degToRad(78), MathUtils.degToRad(180));
   private focusPoint = new Vector3();
   private focusTimer = 0;
   private shake = 0;
@@ -195,6 +197,21 @@ export class CameraRig {
       targetPosition.z,
     );
 
+    if (this.mode === 'cinematic') {
+      // Behind the title screen: a slow, wide drift round the valley.
+      this.targetSpherical.theta += dt * 0.045;
+      this.targetSpherical.radius = damp(this.targetSpherical.radius, 19, 0.8, dt);
+      this.targetSpherical.phi = damp(this.targetSpherical.phi, MathUtils.degToRad(74), 0.8, dt);
+      desired.y += 1.4;
+    } else if (this.mode === 'portrait') {
+      // Slide the aim point to the child's screen-right so they stand left of
+      // centre, clear of the panel.
+      const theta = this.spherical.theta;
+      desired.x += Math.cos(theta) * 1.05;
+      desired.z -= Math.sin(theta) * 1.05;
+      desired.y -= targetHeight * 0.08;
+    }
+
     if (this.mode === 'focus') {
       // Swing behind the child and look toward the point of interest.
       const toPoint = new Vector3().subVectors(this.focusPoint, targetPosition).setY(0);
@@ -319,6 +336,27 @@ export class CameraRig {
   /** Used by the day-end / bedtime sequences. */
   setCinematic(enabled: boolean): void {
     this.mode = enabled ? 'cinematic' : 'follow';
+    if (enabled) this.saved.copy(this.targetSpherical);
+    else this.targetSpherical.copy(this.saved);
+  }
+
+  /**
+   * A close, front-on framing of the child, offset so they stand in the left
+   * part of the screen and a panel can sit on the right. Used while choosing
+   * how the child looks, so every tap visibly changes the person in front of
+   * you. `facing` is the direction the child faces; null returns to follow.
+   */
+  setPortrait(facing: number | null): void {
+    if (facing === null) {
+      if (this.mode === 'portrait') {
+        this.mode = 'follow';
+        this.targetSpherical.copy(this.saved);
+      }
+      return;
+    }
+    if (this.mode !== 'portrait') this.saved.copy(this.targetSpherical);
+    this.mode = 'portrait';
+    this.targetSpherical.set(3.6, MathUtils.degToRad(80), facing);
   }
 }
 

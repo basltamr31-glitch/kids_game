@@ -56,6 +56,10 @@ export class Hud {
   private activeSpeech: HTMLElement | null = null;
   private speechTimer: number | null = null;
   private lastHearts = 0;
+  /** What the counter shows. Lags the save while hearts are in flight. */
+  private shownHearts = 0;
+  private heartsInFlight = 0;
+  private visible = true;
   private projected = new Vector3();
 
   constructor(
@@ -133,6 +137,10 @@ export class Hud {
       this.speechLayer,
       this.emoteLayer,
     ]);
+
+    this.lastHearts = ctx.save.save.hearts;
+    this.shownHearts = this.lastHearts;
+    this.heartsValue.textContent = String(this.shownHearts);
 
     this.wireEvents();
     this.refreshDayChip();
@@ -216,20 +224,27 @@ export class Hud {
       return;
     }
 
-    // Show a handful; a long scrollable list is noise for a four-year-old.
-    const visible = remaining.slice(0, this.ctx.formFactor === 'phone' ? 4 : 6);
+    // One suggestion in words, the rest as pictures. Most players cannot read
+    // yet, and six wide text buttons covered a third of the world the game is
+    // about. The words are for the parent reading along; the icons are for the
+    // child. A long list is noise for a four-year-old, so only a few show.
+    const visible = remaining.slice(0, this.ctx.formFactor === 'phone' ? 4 : 5);
+    const more = el('div', { class: 'tasks__more' });
     visible.forEach((activity, index) => {
-      const button = el(
-        'button',
-        {
-          class: `task${index === 0 ? ' task--next' : ''}`,
-          style: `animation-delay:${index * 45}ms`,
-        },
-        [
-          el('span', { class: 'task__icon', text: activity.icon }),
-          el('span', { class: 'task__label', text: this.ctx.loc.t(activity.titleKey) }),
-        ],
-      );
+      const title = this.ctx.loc.t(activity.titleKey);
+      const button =
+        index === 0
+          ? el('button', { class: 'task task--next' }, [
+              el('span', { class: 'task__icon', text: activity.icon }),
+              el('span', { class: 'task__label', text: title }),
+            ])
+          : el('button', {
+              class: 'task task--icon',
+              style: `animation-delay:${index * 45}ms`,
+              'aria-label': title,
+              title,
+              text: activity.icon,
+            });
       onTap(button, () => {
         // Starting from the list is identical to tapping the world bubble: the
         // activity's first step walks the child there. Nothing teleports.
@@ -240,8 +255,9 @@ export class Hud {
           this.interaction.tryStart(activity);
         }
       });
-      this.taskList.appendChild(button);
+      (index === 0 ? this.taskList : more).appendChild(button);
     });
+    if (more.childElementCount > 0) this.taskList.appendChild(more);
   }
 
   /* ---------------- floating prompt ---------------- */
@@ -250,10 +266,80 @@ export class Hud {
     this.updatePrompt();
     this.updateEmotes(dt);
 
+    // Hearts arrive from chores, from petting and from small physical jobs.
+    // Watching the total rather than each source means every one of them
+    // gets the same flight, and a new source cannot forget to animate.
     const hearts = this.ctx.save.save.hearts;
     if (hearts !== this.lastHearts) {
+      const gained = hearts - this.lastHearts;
       this.lastHearts = hearts;
+      if (gained > 0 && this.visible) this.launchHearts(gained);
+    }
+    if (this.heartsInFlight === 0 && this.shownHearts !== hearts) {
+      this.shownHearts = hearts;
       this.heartsValue.textContent = String(hearts);
+    }
+  }
+
+  /**
+   * Hearts rise off the child and fly one by one into the counter, each
+   * landing with a note a little higher than the last. The number ticks up as
+   * they land, so the child sees where the reward came from and where it went.
+   */
+  private launchHearts(count: number): void {
+    const child = this.interaction.anchorPosition('child');
+    if (!child) return;
+    this.projected.copy(child);
+    this.projected.y += 1.3;
+    this.projected.project(this.camera.camera);
+    if (this.projected.z > 1) return;
+    const fromX = (this.projected.x * 0.5 + 0.5) * window.innerWidth;
+    const fromY = (-this.projected.y * 0.5 + 0.5) * window.innerHeight;
+
+    const icon = this.heartsChip.querySelector('.hearts__icon') ?? this.heartsChip;
+    const target = icon.getBoundingClientRect();
+    const toX = target.left + target.width / 2;
+    const toY = target.top + target.height / 2;
+
+    const reduceMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+    // Past a handful they stop reading as individual hearts.
+    const flights = Math.min(count, 5);
+    for (let i = 0; i < flights; i++) {
+      this.heartsInFlight += 1;
+      // The last heart carries whatever is left, so the count always lands.
+      const worth = i === flights - 1 ? count - (flights - 1) : 1;
+      window.setTimeout(() => {
+        const node = el('div', { class: 'heartfly', text: '❤' });
+        this.emoteLayer.appendChild(node);
+        const spread = (i - (flights - 1) / 2) * 34;
+        // Up off the child first, then across: the apex stays below the
+        // counter so a heart never leaves the top of the screen.
+        const arcX = fromX + spread + (toX - fromX) * 0.25;
+        const arcY = Math.max(toY + 24, fromY - 120 - i * 8);
+        const land = (): void => {
+          node.remove();
+          this.heartsInFlight -= 1;
+          this.shownHearts = Math.min(this.lastHearts, this.shownHearts + worth);
+          this.heartsValue.textContent = String(this.shownHearts);
+          this.pulseHearts();
+          this.ctx.audio.play('tap', 1.25 + i * 0.14);
+        };
+        if (reduceMotion || typeof node.animate !== 'function') {
+          land();
+          return;
+        }
+        const animation = node.animate(
+          [
+            { transform: `translate(${fromX}px, ${fromY}px) scale(0.3)`, opacity: 0 },
+            { transform: `translate(${fromX + spread * 0.6}px, ${fromY - 40}px) scale(1.25)`, opacity: 1, offset: 0.22 },
+            { transform: `translate(${arcX}px, ${arcY}px) scale(1.05)`, opacity: 1, offset: 0.5 },
+            { transform: `translate(${toX}px, ${toY}px) scale(0.55)`, opacity: 0.9 },
+          ],
+          { duration: 900, easing: 'cubic-bezier(0.45, 0, 0.55, 1)', fill: 'forwards' },
+        );
+        animation.onfinish = land;
+        animation.oncancel = land;
+      }, 250 + i * 130);
     }
   }
 
@@ -364,6 +450,7 @@ export class Hud {
   }
 
   setVisible(visible: boolean): void {
+    this.visible = visible;
     this.root.style.display = visible ? '' : 'none';
   }
 }

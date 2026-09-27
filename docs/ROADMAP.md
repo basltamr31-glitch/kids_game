@@ -27,7 +27,11 @@ its own.
 
 ---
 
-## Phase 1: the first five minutes *(this branch)*
+## Phase 1: the first five minutes *(done)*
+
+All five are in. Fixing the morning also turned up a real bug: from day 2 on,
+the child was placed inside the mattress, with the camera buried behind the
+headboard.
 
 1. **Title screen.** The game's name over a slow camera drift across the
    valley, a big Play button, and the day number for a returning player. It
@@ -46,6 +50,11 @@ its own.
    land.
 
 ## Phase 2: hearts that mean something
+
+- **Faces that read in any light.** In the low morning sun the child is
+  backlit, and warm light pushes skin and hair toward the same orange, so the
+  face loses its features. The child needs a soft fill or rim term in the toon
+  material, and the palette's skin tones need checking under every time of day.
 
 - **Wardrobe unlocks.** Hearts unlock new outfits, hats and hair colours in the
   character creator. That's a gentle goal with nothing to lose and no store
