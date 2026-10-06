@@ -16,7 +16,7 @@ import type { FormFactor } from '../core/DeviceProfile';
  * shortens its boom, which looks intentional rather than glitchy.
  */
 
-export type CameraMode = 'follow' | 'focus' | 'cinematic';
+export type CameraMode = 'follow' | 'focus' | 'cinematic' | 'portrait';
 
 /**
  * Pitch used once the child is fully indoors. The boom length comes from the
@@ -43,6 +43,7 @@ export type CameraMode = 'follow' | 'focus' | 'cinematic';
 const INDOOR_RADIUS = 4.6;
 const INDOOR_PHI = MathUtils.degToRad(66);
 
+const _probeOffset = new Vector3();
 const _shortened = new Vector3();
 
 export class CameraRig {
@@ -57,6 +58,8 @@ export class CameraRig {
   private smoothedTarget = new Vector3();
   private mode: CameraMode = 'follow';
 
+  /** The follow framing to return to after a title drift or a portrait. */
+  private saved = new Spherical(13, MathUtils.degToRad(78), MathUtils.degToRad(180));
   private focusPoint = new Vector3();
   private focusTimer = 0;
   private shake = 0;
@@ -73,9 +76,8 @@ export class CameraRig {
    * Indoors the boom comes in and lifts to look down into the room.
    */
   private indoorBlend = 0;
-
-  /** Set by cutTo: the next update lands on its target without damping. */
-  private pendingCut = false;
+  private avoidTimer = 0;
+  private occluders: { x: number; z: number; hx: number; hz: number }[] = [];
 
   /** Used to keep the child in view; set once the world exists. */
   private collision: CollisionWorld | null = null;
@@ -131,6 +133,36 @@ export class CameraRig {
     );
   }
 
+  /**
+   * The nearest orbit angle (15° steps, both ways) whose boom is clear, or
+   * failing that the clearest one found, if it beats `current` by a margin.
+   */
+  private clearerTheta(look: Vector3, radius: number, phi: number, current: number): number | null {
+    const probe = new Spherical(radius, phi, 0);
+    let best: number | null = null;
+    let bestClear = current + 0.2;
+    for (let i = 1; i <= 12; i++) {
+      for (const sign of [1, -1]) {
+        probe.theta = this.targetSpherical.theta + sign * i * (Math.PI / 12);
+        const clear = this.firstClearDistance(look, _probeOffset.setFromSpherical(probe));
+        if (clear >= 0.95) return probe.theta;
+        if (clear > bestClear) {
+          bestClear = clear;
+          best = probe.theta;
+        }
+      }
+    }
+    return best;
+  }
+
+  /** Called when obstruction avoidance picks a new angle. */
+  onAvoid: ((theta: number) => void) | null = null;
+
+  /** Current orbit angle: the direction from the target to the camera. */
+  get orbitTheta(): number {
+    return this.spherical.theta;
+  }
+
   /** Pull the camera to a scripted point of interest for a few seconds. */
   focusOn(point: Vector3, seconds: number): void {
     this.focusPoint.copy(point);
@@ -138,22 +170,28 @@ export class CameraRig {
     this.mode = 'focus';
   }
 
+  /**
+   * Cuts straight to a framing of the target, skipping the damped glide.
+   * Used behind a fade so the first visible frame is already composed.
+   */
+  snapTo(targetPosition: Vector3, targetHeight: number, theta: number, indoor: boolean): void {
+    this.mode = 'follow';
+    this.focusTimer = 0;
+    this.targetSpherical.theta = theta;
+    this.spherical.theta = theta;
+    this.indoorBlend = indoor ? 1 : 0;
+    this.spherical.radius = indoor ? INDOOR_RADIUS : this.targetSpherical.radius;
+    this.spherical.phi = indoor ? INDOOR_PHI : this.targetSpherical.phi;
+    this.lookAt.set(
+      targetPosition.x,
+      targetPosition.y + targetHeight * (0.62 + (indoor ? 0.3 : 0)),
+      targetPosition.z,
+    );
+  }
+
   clearFocus(): void {
     this.focusTimer = 0;
     this.mode = 'follow';
-  }
-
-  /**
-   * Jumps to a new shot on the next frame instead of gliding to it.
-   *
-   * For when the child is moved under a fade or a closing panel: a glide from
-   * the farmyard to the bedroom flies the camera through the chalet wall.
-   */
-  cutTo(theta: number, indoor: boolean): void {
-    this.clearFocus();
-    this.targetSpherical.theta = theta;
-    this.indoorBlend = indoor ? 1 : 0;
-    this.pendingCut = true;
   }
 
   get isFocused(): boolean {
@@ -191,6 +229,24 @@ export class CameraRig {
       targetPosition.y + targetHeight * 0.62,
       targetPosition.z,
     );
+
+    if (this.mode === 'cinematic') {
+      // Behind the title screen: a slow, wide drift round the valley.
+      this.targetSpherical.theta += dt * 0.045;
+      this.targetSpherical.radius = damp(this.targetSpherical.radius, 19, 0.8, dt);
+      this.targetSpherical.phi = damp(this.targetSpherical.phi, MathUtils.degToRad(74), 0.8, dt);
+      desired.y += 1.4;
+    } else if (this.mode === 'portrait') {
+      // Slide the aim point to the child's screen-right so they stand left of
+      // centre, clear of the panel.
+      // Scaled by how far the camera really is: indoors the boom is often
+      // shortened by walls, and a fixed shift would push the child off screen.
+      const theta = this.spherical.theta;
+      const shift = Math.min(1.05, this.camera.position.distanceTo(this.lookAt) * 0.26);
+      desired.x += Math.cos(theta) * shift;
+      desired.z -= Math.sin(theta) * shift;
+      desired.y -= targetHeight * 0.08;
+    }
 
     if (this.mode === 'focus') {
       // Swing behind the child and look toward the point of interest.
@@ -230,12 +286,6 @@ export class CameraRig {
 
     this.lookAt.lerp(desired, 1 - Math.exp(-9 * dt));
 
-    if (this.pendingCut) {
-      this.pendingCut = false;
-      this.spherical.set(wantRadius, wantPhi, wantTheta);
-      this.lookAt.copy(desired);
-    }
-
     const offset = new Vector3().setFromSpherical(this.spherical);
     let position = new Vector3().addVectors(this.lookAt, offset);
 
@@ -248,6 +298,20 @@ export class CameraRig {
     // would do: step closer until you can see them.
     if (this.collision && this.indoorBlend > 0.01) {
       const clear = this.firstClearDistance(this.lookAt, offset);
+      // Shortening alone is not enough when the obstacle is right behind the
+      // child (a wardrobe they are standing at, the bed they climbed out of):
+      // the boom bottoms out inside it and the child vanishes. Then the
+      // camera walks round to the nearest angle that can see them, the way
+      // an operator steps sideways rather than pressing into a wall.
+      this.avoidTimer -= dt;
+      if (clear < 0.7 && this.avoidTimer <= 0 && this.mode !== 'focus') {
+        this.avoidTimer = 0.3;
+        const better = this.clearerTheta(this.lookAt, this.spherical.radius, this.spherical.phi, clear);
+        if (better !== null) {
+          this.targetSpherical.theta = better;
+          this.onAvoid?.(better);
+        }
+      }
       if (clear < 1) {
         _shortened.copy(offset).multiplyScalar(Math.max(0.35, clear));
         position = new Vector3().addVectors(this.lookAt, _shortened);
@@ -303,12 +367,27 @@ export class CameraRig {
       const z = lookAt.z + offset.z * t;
       // Only walls and furniture; an animal wandering past must not yank the
       // camera in.
-      if (collision.blocks(x, z, 0.3, 'animal')) {
+      if (collision.blocks(x, z, 0.3, 'animal') || this.occluded(x, z)) {
         // Stop just short of whatever was hit.
         return Math.max(0.3, (i - 1) / steps);
       }
     }
     return 1;
+  }
+
+  /**
+   * Things the camera cannot see through that the child can walk past, such
+   * as the chalet's half-height room dividers. Axis-aligned, world space.
+   */
+  setOccluders(boxes: { x: number; z: number; hx: number; hz: number }[]): void {
+    this.occluders = boxes;
+  }
+
+  private occluded(x: number, z: number): boolean {
+    for (const o of this.occluders) {
+      if (Math.abs(x - o.x) < o.hx + 0.3 && Math.abs(z - o.z) < o.hz + 0.3) return true;
+    }
+    return false;
   }
 
   /** Camera-relative forward/right on the ground plane, for movement input. */
@@ -322,6 +401,27 @@ export class CameraRig {
   /** Used by the day-end / bedtime sequences. */
   setCinematic(enabled: boolean): void {
     this.mode = enabled ? 'cinematic' : 'follow';
+    if (enabled) this.saved.copy(this.targetSpherical);
+    else this.targetSpherical.copy(this.saved);
+  }
+
+  /**
+   * A close, front-on framing of the child, offset so they stand in the left
+   * part of the screen and a panel can sit on the right. Used while choosing
+   * how the child looks, so every tap visibly changes the person in front of
+   * you. `facing` is the direction the child faces; null returns to follow.
+   */
+  setPortrait(facing: number | null): void {
+    if (facing === null) {
+      if (this.mode === 'portrait') {
+        this.mode = 'follow';
+        this.targetSpherical.copy(this.saved);
+      }
+      return;
+    }
+    if (this.mode !== 'portrait') this.saved.copy(this.targetSpherical);
+    this.mode = 'portrait';
+    this.targetSpherical.set(3.6, MathUtils.degToRad(80), facing);
   }
 }
 

@@ -311,7 +311,7 @@ body {
   position: absolute;
   left: calc(var(--u) * 0.9 + var(--sa-left));
   top: calc(var(--u) * 5.2 + var(--sa-top));
-  width: calc(var(--u) * 15);
+  width: calc(var(--u) * 15.5);
   max-height: calc(100% - var(--u) * 9);
   display: flex;
   flex-direction: column;
@@ -355,6 +355,16 @@ body {
   transform: scale(0.97);
 }
 
+.task {
+  /* Press-and-hold reads the task aloud; stop iOS offering to copy it. */
+  -webkit-touch-callout: none;
+}
+
+/* Held long enough to be read aloud. */
+.task.task--heard {
+  box-shadow: 0 0 0 calc(var(--u) * 0.25) var(--blue);
+}
+
 .task__icon {
   font-size: calc(var(--u) * 1.35);
   flex: 0 0 auto;
@@ -372,6 +382,46 @@ body {
 .task--next {
   background: var(--gold);
   box-shadow: 0 calc(var(--u) * 0.22) 0 #d69a2c;
+  font-size: calc(var(--u) * 0.95);
+  min-height: calc(var(--u) * 3.2);
+  animation: task-nudge 3.2s ease-in-out 1.5s infinite;
+}
+
+.task--next .task__icon {
+  font-size: calc(var(--u) * 1.6);
+}
+
+/* The other choices, as pictures in a row under the suggestion. */
+.tasks__more {
+  display: flex;
+  flex-wrap: wrap;
+  gap: calc(var(--u) * 0.45);
+  padding-left: calc(var(--u) * 0.2);
+}
+
+.task.task--icon {
+  width: calc(var(--u) * 3.2);
+  height: calc(var(--u) * 3.2);
+  min-height: 0;
+  padding: 0;
+  justify-content: center;
+  border-radius: 50%;
+  font-size: calc(var(--u) * 1.55);
+  line-height: 1;
+}
+
+/* A gentle "this one?" wiggle, the way a parent points. Never urgent. */
+@keyframes task-nudge {
+  0%, 84%, 100% { transform: rotate(0); }
+  88% { transform: rotate(-1.6deg); }
+  92% { transform: rotate(1.6deg); }
+  96% { transform: rotate(-0.8deg); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .task--next {
+    animation: none;
+  }
 }
 
 .task--done {
@@ -380,6 +430,45 @@ body {
 
 .task--done .task__label {
   text-decoration: line-through;
+}
+
+/* Something new in the album. */
+.btn.has-new {
+  position: relative;
+  animation: heart-pop 0.6s ease 2;
+}
+
+.btn.has-new::after {
+  content: '';
+  position: absolute;
+  top: calc(var(--u) * 0.2);
+  right: calc(var(--u) * 0.2);
+  width: calc(var(--u) * 0.85);
+  height: calc(var(--u) * 0.85);
+  border-radius: 50%;
+  background: var(--heart);
+  box-shadow: 0 0 0 calc(var(--u) * 0.18) var(--cream);
+}
+
+/* A heart on its way from the child to the counter. Positioned entirely by
+   its transform, which the Web Animations API drives. */
+.heartfly {
+  position: absolute;
+  left: 0;
+  top: 0;
+  margin: calc(var(--u) * -0.8) 0 0 calc(var(--u) * -0.8);
+  width: calc(var(--u) * 1.6);
+  height: calc(var(--u) * 1.6);
+  display: grid;
+  place-items: center;
+  font-size: calc(var(--u) * 1.5);
+  color: var(--heart);
+  text-shadow:
+    0 0 calc(var(--u) * 0.1) #fff,
+    0 calc(var(--u) * 0.12) calc(var(--u) * 0.3) var(--shadow-strong);
+  pointer-events: none;
+  will-change: transform, opacity;
+  z-index: 5;
 }
 
 /* --- world prompt bubble --- */
@@ -420,6 +509,9 @@ body {
    without a word of text. */
 .prompt--object .prompt__bubble {
   border-color: var(--green);
+  /* Dashed as well as green: the difference must survive colour blindness,
+     where green and gold can look alike. */
+  border-style: dashed;
   animation-duration: 2.4s;
 }
 
@@ -663,9 +755,191 @@ body {
   pointer-events: auto;
 }
 
+/* Quick blink for cuts; the slow fade above is for falling asleep. */
+.fade.fade--quick {
+  transition: opacity 0.34s ease;
+}
+
+/* ------------------------------------------------------------------ */
+/* Title                                                               */
+/* ------------------------------------------------------------------ */
+
+.title {
+  position: absolute;
+  inset: 0;
+  z-index: 60;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: calc(var(--u) * 0.8);
+  padding: calc(var(--u) * 1.2 + var(--sa-top)) calc(var(--u) * 1.2)
+    calc(var(--u) * 1.2 + var(--sa-bottom));
+  /* Soft light at the top for the logo, and a warm floor for the button.
+     The valley stays visible through the middle. */
+  background:
+    radial-gradient(ellipse 60% 45% at 50% 30%, rgba(255, 248, 236, 0.5), transparent 70%),
+    linear-gradient(180deg, rgba(58, 38, 22, 0.08) 0%, transparent 40%, rgba(58, 38, 22, 0.28) 100%);
+  animation: screen-in 0.6s ease;
+}
+
+.title__logo {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  line-height: 0.95;
+  color: var(--cream);
+  text-shadow:
+    0 calc(var(--u) * 0.16) 0 var(--brown),
+    0 calc(var(--u) * 0.5) calc(var(--u) * 1.2) rgba(58, 38, 22, 0.35);
+  animation: title-float 5s ease-in-out infinite;
+}
+
+.title__small {
+  font-size: calc(var(--u) * 1.7);
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--gold);
+}
+
+.title__big {
+  font-size: calc(var(--u) * 4.4);
+  font-weight: 900;
+  letter-spacing: -0.01em;
+  -webkit-text-stroke: calc(var(--u) * 0.08) var(--brown);
+  paint-order: stroke fill;
+}
+
+.title__tagline {
+  font-size: calc(var(--u) * 1.05);
+  font-weight: 700;
+  color: var(--cream);
+  text-shadow: 0 calc(var(--u) * 0.1) calc(var(--u) * 0.4) rgba(58, 38, 22, 0.7);
+  margin-bottom: calc(var(--u) * 1.2);
+}
+
+.title__play {
+  appearance: none;
+  border: calc(var(--u) * 0.3) solid var(--cream);
+  width: calc(var(--u) * 6);
+  height: calc(var(--u) * 6);
+  border-radius: 50%;
+  background: var(--green);
+  color: var(--cream);
+  box-shadow:
+    0 calc(var(--u) * 0.4) 0 var(--green-deep),
+    0 calc(var(--u) * 0.9) calc(var(--u) * 1.8) var(--shadow-strong);
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  animation: title-pulse 1.8s ease-in-out infinite;
+}
+
+.title__play:active {
+  transform: translateY(calc(var(--u) * 0.3)) scale(0.96);
+  box-shadow: 0 calc(var(--u) * 0.1) 0 var(--green-deep);
+  animation: none;
+}
+
+.title__play-icon {
+  width: 55%;
+  height: 55%;
+  margin-left: 8%;
+}
+
+.title__play-icon svg {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+.title__day {
+  font-size: calc(var(--u) * 0.95);
+  font-weight: 800;
+  color: var(--brown);
+  background: var(--cream);
+  border-radius: var(--radius-pill);
+  padding: calc(var(--u) * 0.35) calc(var(--u) * 1.1);
+  box-shadow: 0 calc(var(--u) * 0.2) 0 var(--cream-deep);
+}
+
+@keyframes title-float {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(calc(var(--u) * -0.35)); }
+}
+
+@keyframes title-pulse {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.06); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .title__logo,
+  .title__play {
+    animation: none;
+  }
+}
+
 /* ------------------------------------------------------------------ */
 /* Customization                                                       */
 /* ------------------------------------------------------------------ */
+
+/* The creator sits to the right with the world undimmed, so the child can
+   watch themselves change; the camera frames them on the left. */
+.screen--side {
+  background: linear-gradient(90deg, transparent 40%, rgba(58, 38, 22, 0.22) 100%);
+  backdrop-filter: none;
+  justify-items: end;
+}
+
+.screen--side .screen__card {
+  width: min(calc(var(--u) * 31), 60%);
+}
+
+.screen--side .swatches {
+  gap: calc(var(--u) * 0.35);
+}
+
+.screen--side .screen__card {
+  padding: calc(var(--u) * 1.1) calc(var(--u) * 1.3);
+}
+
+.screen--side .screen__title {
+  margin-top: 0;
+  margin-bottom: calc(var(--u) * 0.7);
+}
+
+.screen--side .customize__row {
+  margin-bottom: calc(var(--u) * 0.55);
+}
+
+.screen--side .customize__label {
+  width: calc(var(--u) * 4.6);
+}
+
+.screen--side .swatch {
+  width: calc(var(--u) * 2.1);
+  height: calc(var(--u) * 2.1);
+  min-width: calc(var(--u) * 2.1);
+}
+
+.chip.chip--portrait {
+  width: calc(var(--u) * 3);
+  height: calc(var(--u) * 3);
+  min-height: 0;
+  padding: calc(var(--u) * 0.2);
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+}
+
+.chip.chip--portrait[aria-pressed='true'] {
+  background: #fff;
+  border-color: var(--green);
+  box-shadow: 0 0 0 calc(var(--u) * 0.18) var(--green);
+}
 
 .customize__row {
   display: flex;
@@ -730,9 +1004,127 @@ body {
   color: #fff;
 }
 
+/* Earned options before they are earned: visible, softened, with the
+   heart count on a little tag, so a child can see what is coming. */
+.swatch.is-locked,
+.chip.is-locked {
+  position: relative;
+  filter: saturate(0.45);
+  opacity: 0.75;
+}
+
+.lock-badge {
+  position: absolute;
+  right: calc(var(--u) * -0.45);
+  bottom: calc(var(--u) * -0.35);
+  font-size: calc(var(--u) * 0.6);
+  font-weight: 800;
+  line-height: 1;
+  color: #fff;
+  background: var(--heart);
+  border-radius: var(--radius-pill);
+  padding: calc(var(--u) * 0.15) calc(var(--u) * 0.3);
+  box-shadow: 0 calc(var(--u) * 0.08) 0 rgba(0, 0, 0, 0.15);
+  white-space: nowrap;
+}
+
+.chip.chip--icon {
+  position: relative;
+  font-size: calc(var(--u) * 1.5);
+  line-height: 1;
+}
+
+/* ------------------------------------------------------------------ */
+/* Milestone                                                           */
+/* ------------------------------------------------------------------ */
+
+.screen--celebrate .screen__card {
+  text-align: center;
+  width: min(calc(var(--u) * 28), 92%);
+}
+
+.milestone__icon {
+  font-size: calc(var(--u) * 4.4);
+  line-height: 1.1;
+  margin: calc(var(--u) * 0.2) 0 calc(var(--u) * 0.4);
+  animation: milestone-pop 0.7s cubic-bezier(0.2, 1.6, 0.4, 1) both;
+}
+
+.milestone__text {
+  font-size: calc(var(--u) * 1.1);
+  font-weight: 700;
+}
+
+.milestone__actions {
+  display: flex;
+  flex-direction: column;
+  gap: calc(var(--u) * 0.5);
+}
+
+@keyframes milestone-pop {
+  0% { transform: scale(0.2) rotate(-20deg); opacity: 0; }
+  100% { transform: scale(1) rotate(0); opacity: 1; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .milestone__icon {
+    animation: none;
+  }
+}
+
 /* ------------------------------------------------------------------ */
 /* Day end                                                             */
 /* ------------------------------------------------------------------ */
+
+/* The day's photos, pinned like prints on a fridge. */
+.story {
+  display: flex;
+  justify-content: center;
+  gap: calc(var(--u) * 0.9);
+  margin: calc(var(--u) * 0.6) 0 calc(var(--u) * 0.4);
+}
+
+.story__photo {
+  margin: 0;
+  background: #fff;
+  padding: calc(var(--u) * 0.35) calc(var(--u) * 0.35) calc(var(--u) * 0.2);
+  border-radius: calc(var(--u) * 0.25);
+  box-shadow: 0 calc(var(--u) * 0.25) calc(var(--u) * 0.6) var(--shadow);
+  transform: rotate(var(--tilt, 0deg));
+  width: calc(var(--u) * 9);
+  animation: photo-in 0.5s cubic-bezier(0.2, 1.3, 0.5, 1) both;
+}
+
+.story__photo img {
+  display: block;
+  width: 100%;
+  aspect-ratio: 8 / 5;
+  object-fit: cover;
+  border-radius: calc(var(--u) * 0.12);
+  background: var(--cream-deep);
+}
+
+.story__photo figcaption {
+  font-size: calc(var(--u) * 0.66);
+  font-weight: 700;
+  color: var(--brown-soft);
+  text-align: center;
+  margin-top: calc(var(--u) * 0.2);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+@keyframes photo-in {
+  0% { opacity: 0; transform: translateY(calc(var(--u) * 1)) rotate(0deg) scale(0.9); }
+  100% { opacity: 1; transform: rotate(var(--tilt, 0deg)); }
+}
+
+@media (max-height: 420px) {
+  .story__photo {
+    width: calc(var(--u) * 7.2);
+  }
+}
 
 .dayend__stats {
   display: flex;
@@ -802,9 +1194,91 @@ body {
   box-shadow: inset 0 0 0 calc(var(--u) * 0.12) var(--cream-deep);
 }
 
+.book__entry {
+  position: relative;
+}
+
+/* An empty frame: dashed, with a faint hint of what belongs there. */
 .book__entry--locked {
-  opacity: 0.4;
+  background: transparent;
+  box-shadow: none;
+  border: calc(var(--u) * 0.14) dashed var(--cream-deep);
+}
+
+.book__entry--locked .book__icon {
+  opacity: 0.35;
   filter: grayscale(1);
+}
+
+.book__tabs {
+  display: flex;
+  justify-content: center;
+  gap: calc(var(--u) * 0.5);
+  margin-bottom: calc(var(--u) * 0.6);
+}
+
+.book__tab {
+  appearance: none;
+  border: calc(var(--u) * 0.15) solid var(--cream-deep);
+  background: #fff;
+  color: var(--brown);
+  font: inherit;
+  font-weight: 700;
+  font-size: calc(var(--u) * 0.85);
+  border-radius: var(--radius-pill);
+  min-height: calc(var(--u) * 2.8);
+  padding: calc(var(--u) * 0.3) calc(var(--u) * 0.9);
+  display: flex;
+  align-items: center;
+  gap: calc(var(--u) * 0.4);
+  cursor: pointer;
+}
+
+.book__tab[aria-selected='true'] {
+  background: var(--gold);
+  border-color: #d69a2c;
+}
+
+.book__tab-icon {
+  font-size: calc(var(--u) * 1.3);
+}
+
+.book__summary {
+  text-align: center;
+  margin: 0 0 calc(var(--u) * 0.6);
+}
+
+.book__progress {
+  position: relative;
+  height: calc(var(--u) * 1.6);
+  border-radius: var(--radius-pill);
+  background: var(--cream-deep);
+  overflow: hidden;
+  margin-bottom: calc(var(--u) * 0.8);
+}
+
+.book__progress-fill {
+  position: absolute;
+  inset: 0 auto 0 0;
+  background: var(--heart);
+  border-radius: var(--radius-pill);
+}
+
+.book__progress-label {
+  position: relative;
+  display: block;
+  text-align: center;
+  line-height: calc(var(--u) * 1.6);
+  font-size: calc(var(--u) * 0.8);
+  font-weight: 800;
+  color: var(--brown);
+}
+
+/* Short screens: tabs show icons only. */
+@media (max-height: 420px) {
+  .book__tab-label {
+    display: none;
+  }
 }
 
 .book__icon {
@@ -1109,6 +1583,41 @@ input[type='range']::-moz-range-thumb {
   .rotate-hint {
     display: grid;
   }
+}
+
+/* Left-handed layout: the HUD mirrored left to right. The task list, which a
+   child reaches for most, moves to the other edge, and the day, hearts and
+   menu swap corners with it. */
+body.left-handed .tasks {
+  left: auto;
+  right: calc(var(--u) * 0.9 + var(--sa-right));
+  align-items: flex-end;
+}
+
+body.left-handed .tasks__title {
+  text-align: right;
+  padding: 0 calc(var(--u) * 0.6) 0 0;
+}
+
+body.left-handed .tasks__more {
+  justify-content: flex-end;
+}
+
+body.left-handed .hud__topleft {
+  left: auto;
+  right: calc(var(--u) * 0.9 + var(--sa-right));
+}
+
+body.left-handed .hud__topright {
+  right: auto;
+  left: calc(var(--u) * 0.9 + var(--sa-left));
+  flex-direction: row-reverse;
+}
+
+body.left-handed .toasts {
+  right: auto;
+  left: calc(var(--u) * 0.9 + var(--sa-left));
+  align-items: flex-start;
 }
 
 /* Respect the OS reduced-motion preference and our own setting. */

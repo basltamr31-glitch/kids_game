@@ -114,6 +114,28 @@ export class CapacitorPlatform extends WebPlatform {
     }
   }
 
+  /**
+   * The Android WebView has no speechSynthesis, so on device this goes
+   * through the system text-to-speech engine, which runs offline.
+   */
+  override speak(text: string, lang: string, pitch = 1.1): void {
+    void (async () => {
+      try {
+        const { TextToSpeech } = await import('@capacitor-community/text-to-speech');
+        await TextToSpeech.stop();
+        await TextToSpeech.speak({ text, lang, rate: 0.9, pitch, volume: 1.0 });
+      } catch {
+        super.speak(text, lang, pitch);
+      }
+    })();
+  }
+
+  override stopSpeaking(): void {
+    void import('@capacitor-community/text-to-speech')
+      .then(({ TextToSpeech }) => TextToSpeech.stop())
+      .catch(() => super.stopSpeaking());
+  }
+
   override async lockOrientation(orientation: Orientation): Promise<void> {
     try {
       const { ScreenOrientation } = await import('@capacitor/screen-orientation');

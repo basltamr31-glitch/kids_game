@@ -39,6 +39,8 @@ export interface CharacterLook {
   skirt: boolean;
   apron?: string;
   freckles?: boolean;
+  /** 0 or absent = no hat. See content/Milestones.ts for how hats are earned. */
+  hat?: number;
 }
 
 export type ClipName =
@@ -270,6 +272,9 @@ export class CharacterRig {
     neck.add(buildNeck(look, s, skinMat));
     head.add(buildHead(look, s, skinMat));
     hair.add(buildHair(look, s));
+    // On the head, not the hair joint: a hat sits still while hair swings.
+    const hatMesh = buildHat(look, s);
+    if (hatMesh) head.add(hatMesh);
 
     for (const side of [-1, 1] as const) {
       const shoulder = side < 0 ? shoulderL : shoulderR;
@@ -1421,6 +1426,76 @@ function addFringe(
  * Four styles, each chosen for a distinct silhouette rather than for detail:
  * at gameplay distance the outline is all that reads.
  */
+/**
+ * Earned hats. Built from the same primitives as everything else and sized
+ * from the head radius, so they fit children and grown-ups alike.
+ */
+function buildHat(look: CharacterLook, s: number): Mesh | null {
+  const hat = look.hat ?? 0;
+  if (hat <= 0) return null;
+  const b = new PartBuilder();
+  const r = look.adult ? 0.25 * s : 0.275 * s;
+
+  switch (hat) {
+    case 1: {
+      // Straw sun hat: wide brim, low crown, red band.
+      b.cylinder(r * 1.8, r * 1.85, 0.025 * s, '#E6C27A', { pos: [0, r * 0.7, -r * 0.05] }, 20);
+      b.cylinder(r * 0.86, r * 1.0, r * 0.55, '#E6C27A', { pos: [0, r * 1.0, -r * 0.05] }, 16);
+      b.cylinder(r * 1.01, r * 1.01, r * 0.16, '#D9605E', { pos: [0, r * 0.82, -r * 0.05] }, 16);
+      break;
+    }
+    case 2: {
+      // Flower crown: a green wreath with daisies across the front.
+      b.torus(r * 0.98, 0.028 * s, '#5E9E52', { pos: [0, r * 0.62, 0], rot: [Math.PI / 2 - 0.12, 0, 0] }, 18);
+      const petals = ['#FFFFFF', '#F4B6C8', '#F6D35B', '#FFFFFF', '#B9A2E0', '#F4B6C8', '#F6D35B'];
+      petals.forEach((tint, i) => {
+        const a = -Math.PI * 0.85 + (i / (petals.length - 1)) * Math.PI * 1.7;
+        const x = Math.sin(a) * r * 0.98;
+        const z = Math.cos(a) * r * 0.98;
+        const y = r * 0.62 + Math.cos(a) * r * 0.12;
+        b.sphere(0.05 * s, tint, { pos: [x, y, z], scale: [1, 0.6, 1] }, 7);
+        b.sphere(0.02 * s, '#F2B544', { pos: [x * 1.04, y + 0.02 * s, z * 1.04] }, 5);
+      });
+      break;
+    }
+    case 3: {
+      // Red bobble hat with a cream turn-up.
+      b.lathe(
+        [
+          [0, r * 1.2],
+          [r * 0.55, r * 1.12],
+          [r * 0.92, r * 0.8],
+          [r * 1.08, r * 0.38],
+          [r * 1.1, r * 0.3],
+        ],
+        '#D9605E', {}, 16,
+      );
+      b.torus(r * 1.08, 0.06 * s, '#F4E8D6', { pos: [0, r * 0.34, 0], rot: [Math.PI / 2, 0, 0] }, 18);
+      b.sphere(0.1 * s, '#F4E8D6', { pos: [0, r * 1.3, 0] }, 9);
+      break;
+    }
+    default: {
+      // A little golden crown with five points and a red jewel.
+      b.cylinder(r * 0.66, r * 0.62, r * 0.3, '#F2B544', { pos: [0, r * 1.02, 0] }, 16);
+      for (let i = 0; i < 5; i++) {
+        const a = (i / 5) * Math.PI * 2;
+        b.cone(0.045 * s, r * 0.3, '#F2B544', {
+          pos: [Math.sin(a) * r * 0.62, r * 1.3, Math.cos(a) * r * 0.62],
+        }, 6);
+        b.sphere(0.025 * s, '#FFE7A0', {
+          pos: [Math.sin(a) * r * 0.62, r * 1.47, Math.cos(a) * r * 0.62],
+        }, 5);
+      }
+      b.sphere(0.035 * s, '#D9605E', { pos: [0, r * 1.03, r * 0.66] }, 7);
+      break;
+    }
+  }
+
+  const mesh = new Mesh(b.build({ smooth: true, smoothAngle: 1.2, aoStrength: 0.25 }), M.cloth());
+  mesh.castShadow = true;
+  return mesh;
+}
+
 function buildHair(look: CharacterLook, s: number): Mesh {
   const b = new PartBuilder();
   const r = look.adult ? 0.25 * s : 0.275 * s;

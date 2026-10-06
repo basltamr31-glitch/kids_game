@@ -8,6 +8,7 @@
  *   New discovery -> src/content/Items.ts (DISCOVERIES)
  *   New area      -> src/content/Items.ts (AREAS) + an anchor in WorldBuilder
  *   New fixed day -> src/content/Days.ts
+ *   Heart reward  -> src/content/Milestones.ts
  * Nothing under src/gameplay needs to change for any of the above.
  */
 export * from './Types';
@@ -15,6 +16,7 @@ export * from './Animals';
 export * from './Activities';
 export * from './Items';
 export * from './Days';
+export * from './Milestones';
 
 import { ACTIVITIES_BY_ID } from './Activities';
 import { ANIMALS_BY_ID } from './Animals';

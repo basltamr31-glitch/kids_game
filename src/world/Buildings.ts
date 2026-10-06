@@ -4,6 +4,18 @@ import { surface, M } from '../art/Materials';
 import type { Rng } from '../core/Rng';
 
 /**
+ * The chalet's half-height room dividers, in house-local metres (x, z centre,
+ * w along x, d along z). Shared with the camera, which treats them as things
+ * it cannot see through; they are deliberately not solid to the child, whose
+ * route into the bedroom squeezes past the end of one.
+ */
+export const CHALET_DIVIDERS = [
+  { x: 1.6, z: -3.0, w: 0.16, d: 4.4 },
+  { x: 4.6, z: -0.8, w: 4.6, d: 0.16 },
+  { x: 3.6, z: 2.6, w: 0.16, d: 3.2 },
+] as const;
+
+/**
  * Alpine buildings.
  *
  * The chalet is the single most important object in the game — it is the app
@@ -298,9 +310,9 @@ function buildChaletInterior(W: number, D: number, H1: number, upperY: number): 
 
   /* --- half-height room dividers --- */
   // They mark the rooms without hiding them from the cutaway camera.
-  b.bevelBox(0.16, 1.55, 4.4, 0.03, 'woodMid', { pos: [1.6, floorY + 0.78, -3.0] });
-  b.bevelBox(4.6, 1.55, 0.16, 0.03, 'woodMid', { pos: [4.6, floorY + 0.78, -0.8] });
-  b.bevelBox(0.16, 1.55, 3.2, 0.03, 'woodMid', { pos: [3.6, floorY + 0.78, 2.6] });
+  for (const d of CHALET_DIVIDERS) {
+    b.bevelBox(d.w, 1.55, d.d, 0.03, 'woodMid', { pos: [d.x, floorY + 0.78, d.z] });
+  }
 
   /* --- fireplace --- */
   b.bevelBox(0.72, 2.3, 2.1, 0.05, 'stoneFoundation', { pos: [-6.3, floorY + 1.15, 1.2] });

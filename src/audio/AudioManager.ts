@@ -68,6 +68,8 @@ export class AudioManager {
   private nextMelodyAt = 0;
   private chordIndex = 0;
   private musicEnabled = true;
+  /** Audio-clock time until which the generative music stays silent. */
+  private quietUntil = 0;
 
   private settings: SettingsData | null = null;
 
@@ -197,6 +199,84 @@ export class AudioManager {
     this.stream?.gain.gain.setTargetAtTime(amount * 0.13, this.ctx.currentTime, 0.6);
   }
 
+  /* ---------------- voices ---------------- */
+
+  /**
+   * A character "talking" in pitched syllables, the way cartoon villagers do:
+   * it reads as speech in any language and never says a wrong word. Used
+   * when read-aloud is off, so the family still sounds like people.
+   */
+  babble(actor: string, text: string): void {
+    if (!this.synth || !this.buses || this.muted) return;
+    const base = actor === 'father' ? 150 : actor === 'mother' ? 250 : 340;
+    const syllables = Math.max(2, Math.min(10, Math.ceil(text.length / 5)));
+    const start = this.synth.now;
+    for (let i = 0; i < syllables; i++) {
+      const f = base * this.rng.range(0.86, 1.22) * (i === syllables - 1 ? 0.9 : 1);
+      this.synth.tone({
+        frequency: f,
+        glideTo: f * this.rng.range(0.85, 1.1),
+        type: 'triangle',
+        destination: this.buses.sfx.gain,
+        gain: 0.075,
+        hold: 0.05,
+        startAt: start + i * 0.105 + this.rng.range(0, 0.02),
+        env: { attack: 0.01, decay: 0.05, sustain: 0.5, release: 0.06 },
+        filter: 1900,
+      });
+    }
+  }
+
+  /**
+   * The goodnight lullaby: a short, original tune in a slow three, over a
+   * soft held chord, played once as the child falls asleep. The generative
+   * melody steps aside while it plays.
+   */
+  playLullaby(): void {
+    if (!this.synth || !this.buses || this.muted || !this.musicEnabled) return;
+    const s = this.synth;
+    const d = this.buses.music.gain;
+    const beat = 0.62;
+    // Semitones above C5, and length in beats. Two phrases, question and answer.
+    const tune: [number, number][] = [
+      [4, 1], [7, 1], [9, 1], [7, 2], [4, 1], [2, 1], [0, 2], [2, 1], [4, 1], [7, 1], [4, 3],
+      [4, 1], [7, 1], [9, 1], [12, 2], [9, 1], [7, 1], [4, 2], [2, 1], [4, 1], [2, 1], [0, 3],
+    ];
+    const c5 = 523.25;
+    let t = s.now + 0.3;
+    for (const [semi, beats] of tune) {
+      s.tone({
+        frequency: c5 * Math.pow(2, semi / 12),
+        type: 'sine',
+        destination: d,
+        gain: 0.09,
+        hold: beats * beat * 0.8,
+        startAt: t,
+        env: { attack: 0.05, decay: 0.3, sustain: 0.55, release: 0.9 },
+        vibrato: 5,
+      });
+      t += beats * beat;
+    }
+    const length = t - s.now;
+    // A warm bed underneath: C, then F, then C again.
+    const chords: number[][] = [[0, 4, 7], [5, 9, 12], [0, 4, 7]];
+    chords.forEach((chord, i) => {
+      for (const semi of chord) {
+        s.tone({
+          frequency: (c5 / 2) * Math.pow(2, semi / 12),
+          type: 'triangle',
+          destination: d,
+          gain: 0.035,
+          hold: (length / chords.length) * 0.85,
+          startAt: s.now + 0.3 + (length / chords.length) * i,
+          env: { attack: 1.2, decay: 0.5, sustain: 0.85, release: 1.6 },
+          filter: 1100,
+        });
+      }
+    });
+    this.quietUntil = (this.ctx?.currentTime ?? 0) + length + 1;
+  }
+
   /* ---------------- music ---------------- */
 
   setPhase(phase: DayPhase): void {
@@ -231,6 +311,7 @@ export class AudioManager {
 
   private updateMusic(dt: number): void {
     if (!this.synth || !this.buses || !this.musicEnabled) return;
+    if (this.ctx && this.ctx.currentTime < this.quietUntil) return;
     const mood = this.musicMood();
     const destination = this.buses.music.gain;
 

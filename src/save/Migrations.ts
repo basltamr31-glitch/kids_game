@@ -1,4 +1,5 @@
 import { SAVE_VERSION, createNewSave, type SaveData } from './SaveSchema';
+import { milestonesReachedAt } from '../content/Milestones';
 
 /**
  * Save migrations.
@@ -40,6 +41,21 @@ export const MIGRATIONS: Record<number, Migration> = {
         : {};
     data.seenStoryBeats = Array.isArray(data.seenStoryBeats) ? data.seenStoryBeats : [];
     data.version = 3;
+    return data;
+  },
+
+  /** v3 -> v4: hats, and heart milestones that have been celebrated. */
+  3: (data) => {
+    const child =
+      data.child && typeof data.child === 'object' ? (data.child as Record<string, unknown>) : {};
+    child.hat = typeof child.hat === 'number' ? child.hat : 0;
+    data.child = child;
+    // An existing player has already earned whatever their hearts unlock, so
+    // mark those as seen rather than firing a burst of celebrations on update.
+    data.milestonesSeen = Array.isArray(data.milestonesSeen)
+      ? data.milestonesSeen
+      : milestonesReachedAt(typeof data.hearts === 'number' ? data.hearts : 0);
+    data.version = 4;
     return data;
   },
 };

@@ -47,6 +47,8 @@ export interface HouseState {
   breakfastSteps: () => InteractStep[];
   /** Bedtime: wash, brush, then bed. */
   bedtimeSteps: () => InteractStep[];
+  /** Where the child stands beside the bed, in world space, computed now. */
+  bedside: () => Vector3;
   frontDoor: Hinge;
   /** The front door as a physical object: solid when shut, a gap when open. */
   door: Door;
@@ -747,6 +749,7 @@ export function buildHouseInteractions(
     nodes,
     breakfastSteps,
     bedtimeSteps,
+    bedside: () => bedSide(nodes.get('bed')!),
     frontDoor: door.hinge,
     door: frontDoor,
     solidFurniture: solid,

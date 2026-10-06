@@ -174,6 +174,22 @@ export class Player {
     return this.carrying;
   }
 
+  /**
+   * Puts the child somewhere instantly, facing a given way. Only for cuts the
+   * player cannot see (behind a fade), such as waking up in the morning.
+   */
+  placeAt(point: Vector3, facing: number): void {
+    this.position.set(point.x, this.terrain.heightAt(point.x, point.z), point.z);
+    this.group.position.copy(this.position);
+    this.facing = facing;
+    this.group.rotation.y = facing;
+  }
+
+  /** Turns on the spot, eased by the normal body turn. */
+  turnTo(facing: number): void {
+    this.facing = facing;
+  }
+
   /** Which way the body is turned, in radians. Head tracking is relative to it. */
   get facingAngle(): number {
     return this.facing;
@@ -445,6 +461,7 @@ export function lookFromAppearance(appearance: CharacterAppearance): CharacterLo
     secondary: OUTFIT_SECONDARY[appearance.outfit % OUTFIT_SECONDARY.length],
     adult: false,
     skirt: appearance.preset === 'girl' && appearance.outfit % 2 === 0,
+    hat: appearance.hat ?? 0,
   };
 }
 
