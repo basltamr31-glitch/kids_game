@@ -49,9 +49,17 @@ export class SaveManager {
     return this.lastMigration;
   }
 
-  /** True when this is a brand new player (drives the customization flow). */
+  /**
+   * True when this is a brand new player (drives the customization flow).
+   *
+   * Nothing done today counts too: without it, closing the app halfway through
+   * the first day and opening it again asks the child who they are all over.
+   */
   get isFreshSave(): boolean {
-    return this.data.day === 1 && !this.data.tutorialDone && this.data.history.length === 0;
+    return this.data.day === 1
+      && !this.data.tutorialDone
+      && this.data.history.length === 0
+      && this.data.completedToday.length === 0;
   }
 
   async load(): Promise<void> {

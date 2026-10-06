@@ -31,6 +31,30 @@ export interface SuggestionContext {
   thirstyAnimals: number;
   /** Resolves an activity's anchor, for "what is near me". */
   anchorPosition: (id: string) => Vector3 | null;
+  /** Activity ids already done today. */
+  completed: string[];
+}
+
+const EVENING: ReadonlySet<DayPhase> = new Set(['evening', 'night']);
+
+/**
+ * Whether an activity belongs on the list at all right now.
+ *
+ * The list is a question — "what shall we do?" — so every answer on it has to
+ * be one the child can actually pick. Offering "get dressed" before they are
+ * out of bed, or "go to bed" at breakfast, and then answering the tap with a
+ * shrug teaches a four-year-old that the list does not mean what it says.
+ */
+export function canOfferNow(activity: ActivityDefinition, context: SuggestionContext): boolean {
+  // Its turn has not come yet: dressed after waking, teeth after dinner.
+  for (const required of activity.requiresActivities ?? []) {
+    if (!context.completed.includes(required)) return false;
+  }
+  // The end of the day waits for the end of the day. Chores can be done early
+  // if the child wants to; dinner and bed cannot.
+  const eveningOnly = activity.phases.length > 0 && activity.phases.every((p) => EVENING.has(p));
+  if (eveningOnly && !EVENING.has(context.phase)) return false;
+  return true;
 }
 
 /** Ids that happen inside the house. */
@@ -66,7 +90,8 @@ export function suggestionHeading(context: SuggestionContext): string {
 }
 
 /**
- * Orders the day's remaining activities by how well they fit right now.
+ * Orders the day's remaining activities by how well they fit right now,
+ * leaving out the ones that cannot be picked yet.
  *
  * Stable: equal scores keep the day plan's own order, so the fixed rhythm
  * still reads as a rhythm rather than shuffling about.
@@ -75,7 +100,8 @@ export function rankSuggestions(
   activities: ActivityDefinition[],
   context: SuggestionContext,
 ): ActivityDefinition[] {
-  const scored = activities.map((activity, index) => ({
+  const offered = activities.filter((activity) => canOfferNow(activity, context));
+  const scored = offered.map((activity, index) => ({
     activity,
     index,
     score: scoreActivity(activity, context),
@@ -86,6 +112,10 @@ export function rankSuggestions(
 
 function scoreActivity(activity: ActivityDefinition, context: SuggestionContext): number {
   let score = 0;
+
+  // Getting up comes first. A hungry cow outranks most things, but not being
+  // asleep: "feed Bella" offered to a child still in bed skips the morning.
+  if (activity.id === 'wakeup') score += 100;
 
   // An animal that needs something is the most pressing thing on a farm, and
   // it is the clearest cause-and-effect a small child can follow.

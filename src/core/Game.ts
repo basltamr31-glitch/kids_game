@@ -29,7 +29,7 @@ import { ChildNotices } from '../gameplay/ChildNotices';
 import { setFaceResolution } from '../characters/Face';
 import { ParentReactions } from '../gameplay/ParentReactions';
 import type { SuggestionContext } from '../gameplay/Suggestions';
-import { buildHouseInteractions, type HouseState } from '../world/HouseInteractions';
+import { bedSide, buildHouseInteractions, type HouseState } from '../world/HouseInteractions';
 import { buildFarmInteractions, type FarmState } from '../world/FarmInteractions';
 import { AnimalAgent } from '../animals/AnimalAgent';
 import { FamilyAgent } from '../characters/FamilyAgent';
@@ -330,6 +330,7 @@ export class Game {
     } else {
       this.director.beginDay();
       this.syncPhaseDependents();
+      if (this.stillInBed) this.wakeInBed();
     }
 
     this.seedDiscoveries();
@@ -438,6 +439,7 @@ export class Game {
       hungryAnimals: hungry,
       thirstyAnimals: thirsty,
       anchorPosition: (id) => this.interaction.anchorPosition(id),
+      completed: this.ctx.save.save.completedToday,
     };
   }
 
@@ -526,18 +528,40 @@ export class Game {
     this.seedDiscoveries();
 
     // Put the child back in bed, then let them get up.
-    const bed = this.world.anchors.get('bed');
-    if (bed) {
-      this.player.position.copy(bed.position);
-      this.player.group.position.copy(bed.position);
-    }
-    this.player.setExpression('sleepy');
-    this.cameraRig.clearFocus();
+    this.wakeInBed();
 
     this.dayEnding = false;
     this.ui.setFade(false);
     ctx.audio.play('wake');
     this.hud.refreshTasks();
+  }
+
+  /**
+   * Starts the morning where a morning starts. The day's first suggestion is
+   * "get out of bed", which reads as nonsense to a child already standing in
+   * the farmyard.
+   */
+  private wakeInBed(): void {
+    const bed = this.house.nodes.get('bed');
+    if (bed) {
+      // The furniture is the truth here, not the 'bed' anchor: that anchor is
+      // a rough area marker and sits at the foot of the bed against the wall.
+      const side = bedSide(bed);
+      side.y = this.world.terrain.heightAt(side.x, side.z);
+      this.player.position.copy(side);
+      this.player.group.position.copy(side);
+      // Face into the room, towards the camera, so the first thing the child
+      // sees in the morning is themselves yawning beside the bed.
+      this.player.faceToward(side.clone().add(new Vector3(-1, 0, 1)));
+    }
+    this.player.setExpression('sleepy');
+    this.cameraRig.cutTo(-Math.PI / 4, true);
+  }
+
+  /** True while today's plan still has the child asleep. */
+  private get stillInBed(): boolean {
+    return this.director.currentPlan.byPhase.morning.includes('wakeup')
+      && !this.ctx.save.save.completedToday.includes('wakeup');
   }
 
   /**
@@ -611,6 +635,7 @@ export class Game {
         this.ui.pop('customize');
         this.director.beginDay();
         this.syncPhaseDependents();
+        if (this.stillInBed) this.wakeInBed();
         this.hud.refreshTasks();
       },
     );

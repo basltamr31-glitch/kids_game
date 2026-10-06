@@ -74,6 +74,9 @@ export class CameraRig {
    */
   private indoorBlend = 0;
 
+  /** Set by cutTo: the next update lands on its target without damping. */
+  private pendingCut = false;
+
   /** Used to keep the child in view; set once the world exists. */
   private collision: CollisionWorld | null = null;
 
@@ -138,6 +141,19 @@ export class CameraRig {
   clearFocus(): void {
     this.focusTimer = 0;
     this.mode = 'follow';
+  }
+
+  /**
+   * Jumps to a new shot on the next frame instead of gliding to it.
+   *
+   * For when the child is moved under a fade or a closing panel: a glide from
+   * the farmyard to the bedroom flies the camera through the chalet wall.
+   */
+  cutTo(theta: number, indoor: boolean): void {
+    this.clearFocus();
+    this.targetSpherical.theta = theta;
+    this.indoorBlend = indoor ? 1 : 0;
+    this.pendingCut = true;
   }
 
   get isFocused(): boolean {
@@ -213,6 +229,12 @@ export class CameraRig {
     this.spherical.theta = dampAngle(this.spherical.theta, wantTheta, 7, dt);
 
     this.lookAt.lerp(desired, 1 - Math.exp(-9 * dt));
+
+    if (this.pendingCut) {
+      this.pendingCut = false;
+      this.spherical.set(wantRadius, wantPhi, wantTheta);
+      this.lookAt.copy(desired);
+    }
 
     const offset = new Vector3().setFromSpherical(this.spherical);
     let position = new Vector3().addVectors(this.lookAt, offset);

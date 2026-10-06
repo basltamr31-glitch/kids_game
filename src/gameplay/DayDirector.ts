@@ -133,24 +133,27 @@ export class DayDirector {
    */
   onActivityCompleted(): { phaseChanged: boolean; dayComplete: boolean } {
     const completed = this.ctx.save.save.completedToday;
-    const phaseDone = this.plan.byPhase[this.phase].every((id) => completed.includes(id));
+    const phaseDone = () => this.plan.byPhase[this.phase].every((id) => completed.includes(id));
 
+    // Keep going while the phase we land in is already finished. The child is
+    // free to do the afternoon's jobs in the morning, and when they do, the
+    // afternoon has nothing left in it the moment it begins; stopping there
+    // would leave the day waiting for a task that is already done.
     let phaseChanged = false;
-    if (phaseDone) {
-      const index = PHASE_ORDER.indexOf(this.phase);
-      if (index < PHASE_ORDER.length - 1) {
-        const previous = this.phase;
-        this.phase = PHASE_ORDER[index + 1];
-        phaseChanged = true;
-        this.ctx.save.update((data) => {
-          data.phase = this.phase;
-          // Push the clock forward to the new phase if the chores were quick.
-          data.hour = Math.max(data.hour, PHASE_START_HOUR[this.phase]);
-        });
-        this.ctx.bus.emit('day:phase-changed', { phase: this.phase, previous });
-        this.emitBeat(this.phase);
-      }
+    while (phaseDone() && PHASE_ORDER.indexOf(this.phase) < PHASE_ORDER.length - 1) {
+      const previous = this.phase;
+      this.phase = PHASE_ORDER[PHASE_ORDER.indexOf(this.phase) + 1];
+      phaseChanged = true;
+      this.ctx.save.update((data) => {
+        data.phase = this.phase;
+        // Push the clock forward to the new phase if the chores were quick.
+        data.hour = Math.max(data.hour, PHASE_START_HOUR[this.phase]);
+      });
+      this.ctx.bus.emit('day:phase-changed', { phase: this.phase, previous });
     }
+    // One beat, for the phase the day settled in. Skipped-over phases each
+    // talking at once would be Mum and Dad speaking over each other.
+    if (phaseChanged) this.emitBeat(this.phase);
 
     this.ctx.bus.emit('day:task-list-changed');
     return { phaseChanged, dayComplete: this.isDayComplete };

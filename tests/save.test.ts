@@ -148,6 +148,18 @@ describe('SaveManager', () => {
     expect(manager.migrationInfo.recovered).toBe(false);
   });
 
+  it('does not ask who the child is again halfway through the first day', async () => {
+    manager.update((data) => {
+      data.completedToday.push('wakeup');
+    });
+    await manager.flush(true);
+
+    const reloaded = new SaveManager(platform, new EventBus());
+    await reloaded.load();
+    expect(reloaded.save.day).toBe(1);
+    expect(reloaded.isFreshSave).toBe(false);
+  });
+
   it('persists and reloads progress', async () => {
     manager.update((data) => {
       data.day = 12;

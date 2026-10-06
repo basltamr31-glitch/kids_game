@@ -7,6 +7,8 @@ import { Localization } from '../src/localization/Localization';
 import { EventBus } from '../src/core/EventBus';
 import { Rng, fbm2D, clamp, smoothstep, damp } from '../src/core/Rng';
 import { ACTIVITIES_BY_ID, FIXED_ACTIVITIES, SEASON_ORDER, DAY_GENERATION } from '../src/content';
+import { rankSuggestions, type SuggestionContext } from '../src/gameplay/Suggestions';
+import { Vector3 } from 'three';
 import type { GameContext } from '../src/core/GameContext';
 import type { IPlatform, SafeAreaInsets } from '../src/platform/IPlatform';
 
@@ -310,6 +312,66 @@ describe('DayDirector', () => {
     }
     // The paid plan is still valid content.
     expect(paid.buildPlan(10).byPhase.morning).toContain('wakeup');
+  });
+});
+
+describe('Suggestions', () => {
+  const contextFor = (ctx: GameContext, director: DayDirector): SuggestionContext => ({
+    phase: director.currentPhase,
+    weather: ctx.save.save.weather,
+    position: new Vector3(),
+    indoors: false,
+    hungryAnimals: 0,
+    thirstyAnimals: 0,
+    anchorPosition: () => null,
+    completed: ctx.save.save.completedToday,
+  });
+
+  it('only ever offers things the child can actually do, and never runs dry', async () => {
+    // A child who always taps whatever is on top of the list. Every day must
+    // still finish, so hiding an activity can never strand one the day needs.
+    const ctx = await makeContext();
+    const director = new DayDirector(ctx);
+    director.beginDay();
+
+    for (let day = 0; day < 30; day++) {
+      let guard = 0;
+      while (!director.isDayComplete && guard++ < 200) {
+        const context = contextFor(ctx, director);
+        const offered = rankSuggestions(director.remainingToday, context);
+        expect(offered.length, `day ${director.currentPlan.day} ${context.phase}: empty list`)
+          .toBeGreaterThan(0);
+
+        for (const activity of offered) {
+          for (const required of activity.requiresActivities ?? []) {
+            expect(context.completed, `${activity.id} offered before ${required}`).toContain(required);
+          }
+          if (context.phase !== 'evening' && context.phase !== 'night') {
+            expect(['dinner', 'bedtime'], `${activity.id} offered in the ${context.phase}`)
+              .not.toContain(activity.id);
+          }
+        }
+
+        const next = offered[0];
+        ctx.save.update((d) => d.completedToday.push(next.id));
+        director.onActivityCompleted();
+      }
+      expect(guard, `day ${director.currentPlan.day} did not converge`).toBeLessThan(200);
+      director.endDay();
+      director.beginDay();
+    }
+  });
+
+  it('asks the child to get up before anything else on the first morning', async () => {
+    const ctx = await makeContext();
+    const director = new DayDirector(ctx);
+    director.beginDay();
+    // Even with every animal hungry, which is otherwise the top priority.
+    const context = { ...contextFor(ctx, director), hungryAnimals: 6, thirstyAnimals: 6 };
+    const offered = rankSuggestions(director.remainingToday, context).map((a) => a.id);
+    expect(offered[0]).toBe('wakeup');
+    expect(offered).not.toContain('getdressed');
+    expect(offered).not.toContain('bedtime');
   });
 });
 

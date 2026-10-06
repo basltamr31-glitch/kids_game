@@ -74,6 +74,15 @@ function standOffset(node: Object3D, dx: number, dz: number): Vector3 {
   return new Vector3(base.x + dx, base.y, base.z + dz);
 }
 
+/**
+ * Where the child stands to get into or out of bed: the side facing into the
+ * room. The other side is a narrow gap against the east wall, and the camera
+ * sent in after them ends up pressed into the plaster.
+ */
+export function bedSide(bed: Object3D): Vector3 {
+  return standOffset(bed, -1.15, 0.3);
+}
+
 interface MakeOptions {
   id: string;
   node: Object3D;
@@ -507,7 +516,7 @@ export function buildHouseInteractions(
   /* --- bedroom --- */
   {
     const bed = nodes.get('bed')!;
-    const bedStand = standOffset(bed, 1.15, 0);
+    const bedStand = bedSide(bed);
     registry.add(
       make({
         id: 'bed',
@@ -722,7 +731,7 @@ export function buildHouseInteractions(
     }
     steps.push(
       { kind: 'expression', value: 'sleepy' },
-      { kind: 'walkTo', point: standOffset(bed, 1.15, 0), face: worldOf(bed) },
+      { kind: 'walkTo', point: bedSide(bed), face: worldOf(bed) },
       { kind: 'animate', clip: 'yawn', duration: 1.6 },
       { kind: 'speech', actor: 'mother', textKey: 'speech.mother.goodnight', duration: 2.6 },
       { kind: 'animate', clip: 'sleep', duration: 2.2, sound: 'sleep' },
